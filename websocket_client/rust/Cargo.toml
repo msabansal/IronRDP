@@ -44,5 +44,6 @@ features = [
     'RequestInit',
     'RequestMode',
     'Response',
+    'WebSocket',
     'Window',
 ]
