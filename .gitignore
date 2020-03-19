@@ -1,2 +1,5 @@
 Cargo.lock
 target/
+websocket_client/js_wrapper/node_modules/
+**/.idea
+**.log

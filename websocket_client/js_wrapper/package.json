@@ -1,0 +1,31 @@
+{
+  "author": "Salah Kamate <skamate@devolutions.net>",
+  "name": "rdp-wasm",
+  "version": "0.1.0",
+  "scripts": {
+    "copy": "mkdirp dist/public && ncp public dist/public",
+    "clean": "rimraf dist rdp-wasm/**",
+    "build": "npm run clean && npm run copy && webpack",
+    "serve": "webpack-dev-server --host 0.0.0.0 --disableHostCheck true",
+    "wasm-build": "wasm-pack build ../rust/ --out-dir ../js_wrapper/rdp-wasm",
+    "start": "npm run clean && npm run wasm-build && npm run serve",
+    "test": "cargo test && wasm-pack test --headless"
+  },
+  "dependencies": {
+    "package.json": "^2.0.1",
+    "wayk-wasm": "file:./rdp-wasm"
+  },
+  "devDependencies": {
+    "@wasm-tool/wasm-pack-plugin": "^0.4",
+    "html-webpack-plugin": "^3.2",
+    "bootstrap": "^4.3",
+    "text-encoding": "^0.7",
+    "webpack": "^4.33",
+    "webpack-cli": "^3.3",
+    "webpack-dev-server": "^3.7",
+    "rimraf": "^2.6",
+    "ncp": "^2.0.0",
+    "mkdirp": "^0.5.1",
+    "wasm-pack": "^0.9.1"
+  }
+}
