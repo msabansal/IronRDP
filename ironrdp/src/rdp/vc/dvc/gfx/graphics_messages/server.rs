@@ -36,7 +36,8 @@ impl PduParsing for WireToSurface1Pdu {
             .ok_or(GraphicsMessagesError::InvalidFixelFormat)?;
         let destination_rectangle = Rectangle::from_buffer(&mut stream)?;
         let bitmap_data_length = stream.read_u32::<LittleEndian>()? as usize;
-
+        let mut _buffer = vec![0; bitmap_data_length];
+        stream.read_exact(&mut _buffer)?;
         Ok(Self {
             surface_id,
             codec_id,
@@ -52,7 +53,8 @@ impl PduParsing for WireToSurface1Pdu {
         stream.write_u8(self.pixel_format.to_u8().unwrap())?;
         self.destination_rectangle.to_buffer(&mut stream)?;
         stream.write_u32::<LittleEndian>(self.bitmap_data_length as u32)?;
-
+        let mut _buffer = vec![0; self.bitmap_data_length];
+        stream.write_all(&mut _buffer)?;
         Ok(())
     }
 
@@ -507,6 +509,101 @@ impl PduParsing for MapSurfaceToOutputPdu {
         12
     }
 }
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapSurfaceToScaledOutputPdu {
+    pub surface_id: u16,
+    pub output_origin_x: u32,
+    pub output_origin_y: u32,
+    pub target_width: u32,
+    pub target_height: u32,
+}
+
+impl PduParsing for MapSurfaceToScaledOutputPdu {
+    type Error = GraphicsMessagesError;
+
+    fn from_buffer(mut stream: impl io::Read) -> Result<Self, Self::Error> {
+        let surface_id = stream.read_u16::<LittleEndian>()?;
+        let _reserved = stream.read_u16::<LittleEndian>()?;
+        let output_origin_x = stream.read_u32::<LittleEndian>()?;
+        let output_origin_y = stream.read_u32::<LittleEndian>()?;
+        let target_width = stream.read_u32::<LittleEndian>()?;
+        let target_height = stream.read_u32::<LittleEndian>()?;
+
+        Ok(Self {
+            surface_id,
+            output_origin_x,
+            output_origin_y,
+            target_width,
+            target_height,
+        })
+    }
+
+    fn to_buffer(&self, mut stream: impl io::Write) -> Result<(), Self::Error> {
+        stream.write_u16::<LittleEndian>(self.surface_id)?;
+        stream.write_u16::<LittleEndian>(0)?; // reserved
+        stream.write_u32::<LittleEndian>(self.output_origin_x)?;
+        stream.write_u32::<LittleEndian>(self.output_origin_y)?;
+        stream.write_u32::<LittleEndian>(self.target_width)?;
+        stream.write_u32::<LittleEndian>(self.target_height)?;
+
+        Ok(())
+    }
+
+    fn buffer_length(&self) -> usize {
+        20
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MapSurfaceToScaledWindowPdu {
+    pub surface_id: u16,
+    pub window_id: u64,
+    pub mapped_width: u32,
+    pub mapped_height: u32,
+    pub target_width: u32,
+    pub target_height: u32,
+}
+
+impl PduParsing for MapSurfaceToScaledWindowPdu {
+    type Error = GraphicsMessagesError;
+
+    fn from_buffer(mut stream: impl io::Read) -> Result<Self, Self::Error> {
+        let surface_id = stream.read_u16::<LittleEndian>()?;
+        let window_id = stream.read_u64::<LittleEndian>()?;
+        let mapped_width = stream.read_u32::<LittleEndian>()?;
+        let mapped_height = stream.read_u32::<LittleEndian>()?;
+        let target_width = stream.read_u32::<LittleEndian>()?;
+        let target_height = stream.read_u32::<LittleEndian>()?;
+
+        Ok(Self {
+            surface_id,
+            window_id,
+            mapped_width,
+            mapped_height,
+            target_width,
+            target_height,
+        })
+    }
+
+    fn to_buffer(&self, mut stream: impl io::Write) -> Result<(), Self::Error> {
+        stream.write_u16::<LittleEndian>(self.surface_id)?;
+        stream.write_u64::<LittleEndian>(self.window_id)?; // reserved
+        stream.write_u32::<LittleEndian>(self.mapped_width)?;
+        stream.write_u32::<LittleEndian>(self.mapped_height)?;
+        stream.write_u32::<LittleEndian>(self.target_width)?;
+        stream.write_u32::<LittleEndian>(self.target_height)?;
+
+        Ok(())
+    }
+
+    fn buffer_length(&self) -> usize {
+        26
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvictCacheEntryPdu {

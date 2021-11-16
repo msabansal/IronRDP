@@ -1,10 +1,10 @@
-use std::{env, net};
+use std::{env, net, str::FromStr};
 
 use ironrdp::{
     gcc::{
         ClientCoreData, ClientCoreOptionalData, ClientEarlyCapabilityFlags, ClientGccBlocks,
         ClientNetworkData, ClientSecurityData, ColorDepth, ConnectionType, HighColorDepth,
-        RdpVersion, SecureAccessSequence, SupportedColorDepths,
+        RdpVersion, SecureAccessSequence, SupportedColorDepths, ChannelOptions, Channel
     },
     nego::SecurityProtocol,
     rdp::{
@@ -25,6 +25,7 @@ use ironrdp::{
     },
     CapabilitySet, ClientConfirmActive,
 };
+
 use num_traits::ToPrimitive;
 
 use crate::{utils::CodecId, InputConfig, RdpError};
@@ -169,7 +170,7 @@ fn create_optional_core_data(
         supported_color_depths: Some(SupportedColorDepths::all()),
         early_capability_flags: Some(
             ClientEarlyCapabilityFlags::VALID_CONNECTION_TYPE
-                | ClientEarlyCapabilityFlags::WANT_32_BPP_SESSION
+                | ClientEarlyCapabilityFlags::SUPPORT_DYN_VC_GFX_PROTOCOL
                 | ClientEarlyCapabilityFlags::SUPPORT_ERR_INFO_PDU,
         ),
         dig_product_id: Some(config.dig_product_id.clone()),
@@ -189,7 +190,10 @@ fn create_security_data() -> ClientSecurityData {
 
 fn create_network_data() -> ClientNetworkData {
     ClientNetworkData {
-        channels: Vec::new(),
+        channels: vec![Channel {
+            name: String::from_str("drdynvc").unwrap(),
+            options: ChannelOptions::COMPRESS_RDP
+        }],
     }
 }
 

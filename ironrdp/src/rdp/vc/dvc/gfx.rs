@@ -9,7 +9,8 @@ pub use graphics_messages::{
     CapabilitiesV103Flags, CapabilitiesV104Flags, CapabilitiesV10Flags, CapabilitiesV81Flags,
     CapabilitiesV8Flags, CapabilitySet, Codec1Type, Codec2Type, CreateSurfacePdu,
     DeleteEncodingContextPdu, DeleteSurfacePdu, EndFramePdu, EvictCacheEntryPdu,
-    FrameAcknowledgePdu, MapSurfaceToOutputPdu, PixelFormat, QueueDepth, ResetGraphicsPdu,
+    FrameAcknowledgePdu, MapSurfaceToOutputPdu, MapSurfaceToScaledOutputPdu, MapSurfaceToScaledWindowPdu,
+    PixelFormat, QueueDepth, ResetGraphicsPdu,
     SolidFillPdu, StartFramePdu, SurfaceToCachePdu, SurfaceToSurfacePdu, WireToSurface1Pdu,
     WireToSurface2Pdu,
 };
@@ -44,6 +45,8 @@ pub enum ServerPdu {
     MapSurfaceToOutput(MapSurfaceToOutputPdu),
     CapabilitiesConfirm(CapabilitiesConfirmPdu),
     CacheImportReply(CacheImportReplyPdu),
+    MapSurfaceToScaledOutput(MapSurfaceToScaledOutputPdu),
+    MapSurfaceToScaledWindow(MapSurfaceToScaledWindowPdu),
 }
 
 impl PduParsing for ServerPdu {
@@ -126,7 +129,13 @@ impl PduParsing for ServerPdu {
                     ),
                     ServerPduType::CacheImportReply => {
                         ServerPdu::CacheImportReply(CacheImportReplyPdu::from_buffer(&mut stream)?)
-                    }
+                    },
+                    ServerPduType::MapSurfaceToScaledOutput => ServerPdu::MapSurfaceToScaledOutput(
+                        MapSurfaceToScaledOutputPdu::from_buffer(&mut stream)?,
+                    ),
+                    ServerPduType::MapSurfaceToScaledWindow => ServerPdu::MapSurfaceToScaledWindow(
+                        MapSurfaceToScaledWindowPdu::from_buffer(&mut stream)?,
+                    ),
                     ServerPduType::WireToSurface1 | ServerPduType::WireToSurface2 => unreachable!(),
                     _ => return Err(GraphicsPipelineError::UnexpectedServerPduType(pdu_type)),
                 };
@@ -191,6 +200,12 @@ impl PduParsing for ServerPdu {
             ServerPdu::MapSurfaceToOutput(pdu) => pdu
                 .to_buffer(&mut stream)
                 .map_err(GraphicsPipelineError::from),
+            ServerPdu::MapSurfaceToScaledOutput(pdu) => pdu
+                .to_buffer(&mut stream)
+                .map_err(GraphicsPipelineError::from),
+            ServerPdu::MapSurfaceToScaledWindow(pdu) => pdu
+                .to_buffer(&mut stream)
+                .map_err(GraphicsPipelineError::from),
             ServerPdu::StartFrame(pdu) => pdu
                 .to_buffer(&mut stream)
                 .map_err(GraphicsPipelineError::from),
@@ -223,6 +238,8 @@ impl PduParsing for ServerPdu {
                 ServerPdu::DeleteSurface(pdu) => pdu.buffer_length(),
                 ServerPdu::ResetGraphics(pdu) => pdu.buffer_length(),
                 ServerPdu::MapSurfaceToOutput(pdu) => pdu.buffer_length(),
+                ServerPdu::MapSurfaceToScaledOutput(pdu) => pdu.buffer_length(),
+                ServerPdu::MapSurfaceToScaledWindow(pdu) => pdu.buffer_length(),
                 ServerPdu::StartFrame(pdu) => pdu.buffer_length(),
                 ServerPdu::EndFrame(pdu) => pdu.buffer_length(),
                 ServerPdu::EvictCacheEntry(pdu) => pdu.buffer_length(),
@@ -348,6 +365,8 @@ impl<'a> From<&'a ServerPdu> for ServerPduType {
             ServerPdu::EndFrame(_) => Self::EndFrame,
             ServerPdu::ResetGraphics(_) => Self::ResetGraphics,
             ServerPdu::MapSurfaceToOutput(_) => Self::MapSurfaceToOutput,
+            ServerPdu::MapSurfaceToScaledOutput(_) => Self::MapSurfaceToScaledOutput,
+            ServerPdu::MapSurfaceToScaledWindow(_) => Self::MapSurfaceToScaledWindow,
             ServerPdu::CapabilitiesConfirm(_) => Self::CapabilitiesConfirm,
             ServerPdu::CacheImportReply(_) => Self::CacheImportReply,
         }

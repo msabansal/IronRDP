@@ -7,7 +7,7 @@ pub use client::{CacheImportReplyPdu, CapabilitiesAdvertisePdu, FrameAcknowledge
 pub use server::{
     CacheToSurfacePdu, CapabilitiesConfirmPdu, Codec1Type, Codec2Type, CreateSurfacePdu,
     DeleteEncodingContextPdu, DeleteSurfacePdu, EndFramePdu, EvictCacheEntryPdu,
-    MapSurfaceToOutputPdu, PixelFormat, ResetGraphicsPdu, SolidFillPdu, StartFramePdu,
+    MapSurfaceToOutputPdu, MapSurfaceToScaledOutputPdu, MapSurfaceToScaledWindowPdu, PixelFormat, ResetGraphicsPdu, SolidFillPdu, StartFramePdu,
     SurfaceToCachePdu, SurfaceToSurfacePdu, Timestamp, WireToSurface1Pdu, WireToSurface2Pdu,
     RESET_GRAPHICS_PDU_SIZE,
 };
@@ -230,8 +230,8 @@ pub enum CapabilityVersion {
     V10_3 = 0xa_0301,
     V10_4 = 0xa_0400,
     V10_5 = 0xa_0502,
-    V10_6 = 0xa_0601,
-    Unknown = 0xa_0600,
+    V10_6 = 0xa_0600,   // [MS-RDPEGFX-errata]
+    Unknown = 0xa_0601,
 }
 
 bitflags! {
