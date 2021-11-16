@@ -1,5 +1,5 @@
 mod errors;
-mod utils;
+pub mod utils;
 
 use ironrdp::{gcc, nego};
 

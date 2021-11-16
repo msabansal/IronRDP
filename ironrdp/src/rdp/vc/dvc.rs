@@ -13,6 +13,7 @@ use crate::PduParsing;
 mod tests;
 
 pub mod gfx;
+pub mod display;
 
 mod capabilities;
 mod close;
