@@ -1,9 +1,9 @@
-use std::{env, net};
+use std::{env, net, str::FromStr};
 
 use ironrdp::gcc::{
     ClientCoreData, ClientCoreOptionalData, ClientEarlyCapabilityFlags, ClientGccBlocks, ClientNetworkData,
     ClientSecurityData, ColorDepth, ConnectionType, HighColorDepth, RdpVersion, SecureAccessSequence,
-    SupportedColorDepths,
+    SupportedColorDepths, ChannelOptions, Channel,
 };
 use ironrdp::nego::SecurityProtocol;
 use ironrdp::rdp::capability_sets::{
@@ -16,7 +16,7 @@ use ironrdp::rdp::capability_sets::{
 };
 use ironrdp::rdp::{
     AddressFamily, BasicSecurityHeader, BasicSecurityHeaderFlags, ClientInfo, ClientInfoFlags, ClientInfoPdu,
-    CompressionType, Credentials, ExtendedClientInfo, ExtendedClientOptionalInfo, SERVER_CHANNEL_ID,
+    CompressionType, Credentials, ExtendedClientInfo, ExtendedClientOptionalInfo, SERVER_CHANNEL_ID, PerformanceFlags,
 };
 use ironrdp::{CapabilitySet, ClientConfirmActive};
 use num_traits::ToPrimitive;
@@ -46,6 +46,8 @@ pub fn create_client_info_pdu(config: &InputConfig, routing_addr: &net::SocketAd
     let security_header = BasicSecurityHeader {
         flags: BasicSecurityHeaderFlags::INFO_PKT,
     };
+    let mut optional_data = ExtendedClientOptionalInfo::default();
+    optional_data.performance_flags = Some(PerformanceFlags::ENABLE_FONT_SMOOTHING);
     let client_info = ClientInfo {
         credentials: auth_identity_to_credentials(config.credentials.clone()),
         code_page: 0, // ignored if the keyboardLayout field of the Client Core Data is set to zero
@@ -68,7 +70,7 @@ pub fn create_client_info_pdu(config: &InputConfig, routing_addr: &net::SocketAd
                 .map_err(|e| RdpError::UserInfoError(format!("Failed to get current directory path: {:?}", e)))?
                 .to_string_lossy()
                 .to_string(),
-            optional_data: ExtendedClientOptionalInfo::default(),
+            optional_data,
         },
     };
 
@@ -151,7 +153,7 @@ fn create_optional_core_data(
         supported_color_depths: Some(SupportedColorDepths::all()),
         early_capability_flags: Some(
             ClientEarlyCapabilityFlags::VALID_CONNECTION_TYPE
-                | ClientEarlyCapabilityFlags::WANT_32_BPP_SESSION
+                | ClientEarlyCapabilityFlags::SUPPORT_DYN_VC_GFX_PROTOCOL
                 | ClientEarlyCapabilityFlags::SUPPORT_ERR_INFO_PDU,
         ),
         dig_product_id: Some(config.dig_product_id.clone()),
@@ -170,7 +172,12 @@ fn create_security_data() -> ClientSecurityData {
 }
 
 fn create_network_data() -> ClientNetworkData {
-    ClientNetworkData { channels: Vec::new() }
+    ClientNetworkData {
+        channels: vec![Channel {
+            name: String::from_str("drdynvc").unwrap(),
+            options: ChannelOptions::COMPRESS_RDP
+        }],
+    }
 }
 
 fn create_general_capability_set() -> CapabilitySet {

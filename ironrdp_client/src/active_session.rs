@@ -1,6 +1,6 @@
 mod codecs;
-mod fast_path;
-mod x224;
+pub mod fast_path;
+pub mod x224;
 
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -30,6 +30,7 @@ pub fn process_active_stage(
     let mut x224_processor = x224::Processor::new(
         utils::swap_hashmap_kv(connection_sequence_result.joined_static_channels),
         config.global_channel_name.as_str(),
+        connection_sequence_result.initiator_id,
     );
     let mut fast_path_processor = fast_path::ProcessorBuilder {
         decoded_image,
@@ -91,13 +92,13 @@ pub struct DecodedImage {
 }
 
 impl DecodedImage {
-    fn new(width: u32, height: u32, pixel_format: PixelFormat) -> Self {
+    pub fn new(width: u32, height: u32, pixel_format: PixelFormat) -> Self {
         Self {
             data: vec![0; (width * height * u32::from(pixel_format.bytes_per_pixel())) as usize],
         }
     }
 
-    fn get_mut(&mut self) -> &mut [u8] {
+    pub fn get_mut(&mut self) -> &mut [u8] {
         self.data.as_mut_slice()
     }
 }
