@@ -1,10 +1,11 @@
-use std::{env, net};
+use std::{env, io::ErrorKind, net, path::PathBuf, str::FromStr};
 
 use ironrdp::{
     gcc::{
-        ClientCoreData, ClientCoreOptionalData, ClientEarlyCapabilityFlags, ClientGccBlocks,
-        ClientNetworkData, ClientSecurityData, ColorDepth, ConnectionType, HighColorDepth,
-        RdpVersion, SecureAccessSequence, SupportedColorDepths,
+        Channel, ChannelOptions, ClientCoreData, ClientCoreOptionalData,
+        ClientEarlyCapabilityFlags, ClientGccBlocks, ClientNetworkData, ClientSecurityData,
+        ColorDepth, ConnectionType, HighColorDepth, RdpVersion, SecureAccessSequence,
+        SupportedColorDepths,
     },
     nego::SecurityProtocol,
     rdp::{
@@ -21,10 +22,11 @@ use ironrdp::{
         },
         AddressFamily, BasicSecurityHeader, BasicSecurityHeaderFlags, ClientInfo, ClientInfoFlags,
         ClientInfoPdu, CompressionType, Credentials, ExtendedClientInfo,
-        ExtendedClientOptionalInfo, SERVER_CHANNEL_ID,
+        ExtendedClientOptionalInfo, PerformanceFlags, SERVER_CHANNEL_ID,
     },
     CapabilitySet, ClientConfirmActive,
 };
+
 use num_traits::ToPrimitive;
 
 use crate::{utils::CodecId, InputConfig, RdpError};
@@ -54,6 +56,8 @@ pub fn create_client_info_pdu(
     let security_header = BasicSecurityHeader {
         flags: BasicSecurityHeaderFlags::INFO_PKT,
     };
+    let mut optional_data = ExtendedClientOptionalInfo::default();
+    optional_data.performance_flags = Some(PerformanceFlags::ENABLE_FONT_SMOOTHING);
     let client_info = ClientInfo {
         credentials: auth_identity_to_credentials(config.credentials.clone()),
         code_page: 0, // ignored if the keyboardLayout field of the Client Core Data is set to zero
@@ -73,6 +77,12 @@ pub fn create_client_info_pdu(
             },
             address: routing_addr.ip().to_string(),
             dir: env::current_dir()
+                .or_else(|e| {
+                    if e.kind() == ErrorKind::Unsupported {
+                        return Ok(PathBuf::from("/home/sabansal/github/msabansal/IronRDP"));
+                    }
+                    Err(e)
+                })
                 .map_err(|e| {
                     RdpError::UserInfoError(format!(
                         "Failed to get current directory path: {:?}",
@@ -81,7 +91,7 @@ pub fn create_client_info_pdu(
                 })?
                 .to_string_lossy()
                 .to_string(),
-            optional_data: ExtendedClientOptionalInfo::default(),
+            optional_data,
         },
     };
 
@@ -169,7 +179,7 @@ fn create_optional_core_data(
         supported_color_depths: Some(SupportedColorDepths::all()),
         early_capability_flags: Some(
             ClientEarlyCapabilityFlags::VALID_CONNECTION_TYPE
-                | ClientEarlyCapabilityFlags::WANT_32_BPP_SESSION
+                | ClientEarlyCapabilityFlags::SUPPORT_DYN_VC_GFX_PROTOCOL
                 | ClientEarlyCapabilityFlags::SUPPORT_ERR_INFO_PDU,
         ),
         dig_product_id: Some(config.dig_product_id.clone()),
@@ -189,7 +199,10 @@ fn create_security_data() -> ClientSecurityData {
 
 fn create_network_data() -> ClientNetworkData {
     ClientNetworkData {
-        channels: Vec::new(),
+        channels: vec![Channel {
+            name: String::from_str("drdynvc").unwrap(),
+            options: ChannelOptions::COMPRESS_RDP,
+        }],
     }
 }
 

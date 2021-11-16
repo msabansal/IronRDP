@@ -2,8 +2,7 @@ use lazy_static::lazy_static;
 
 use super::{
     graphics_messages::test::{
-        FRAME_ACKNOWLEDGE, FRAME_ACKNOWLEDGE_BUFFER, WIRE_TO_SURFACE_1,
-        WIRE_TO_SURFACE_1_BITMAP_DATA, WIRE_TO_SURFACE_1_BUFFER,
+        FRAME_ACKNOWLEDGE, FRAME_ACKNOWLEDGE_BUFFER, WIRE_TO_SURFACE_1, WIRE_TO_SURFACE_1_BUFFER,
     },
     *,
 };
@@ -40,7 +39,6 @@ fn from_buffer_correctly_parses_server_pdu() {
         *HEADER_WITH_WIRE_TO_SURFACE_1,
         ServerPdu::from_buffer(&mut buffer).unwrap()
     );
-    assert_eq!(WIRE_TO_SURFACE_1_BITMAP_DATA.as_slice(), buffer);
 }
 
 #[test]
@@ -49,8 +47,6 @@ fn to_buffer_correctly_serializes_server_pdu() {
     HEADER_WITH_WIRE_TO_SURFACE_1
         .to_buffer(&mut buffer)
         .unwrap();
-    buffer.extend_from_slice(WIRE_TO_SURFACE_1_BITMAP_DATA.as_slice());
-
     assert_eq!(buffer, HEADER_WITH_WIRE_TO_SURFACE_1_BUFFER.as_slice());
 }
 
@@ -58,7 +54,7 @@ fn to_buffer_correctly_serializes_server_pdu() {
 fn buffer_length_is_correct_for_server_pdu() {
     assert_eq!(
         HEADER_WITH_WIRE_TO_SURFACE_1_BUFFER.len(),
-        HEADER_WITH_WIRE_TO_SURFACE_1.buffer_length() + WIRE_TO_SURFACE_1_BITMAP_DATA.len()
+        HEADER_WITH_WIRE_TO_SURFACE_1.buffer_length()
     );
 }
 

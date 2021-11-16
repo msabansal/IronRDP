@@ -129,7 +129,7 @@ pub const CAPABILITIES_ADVERTISE_BUFFER: [u8; 122] = [
     0x0, 0x1, 0xa, 0x0, 0x10, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
     0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2, 0xa, 0x0, 0x4, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x1, 0x3,
     0xa, 0x0, 0x4, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x4, 0xa, 0x0, 0x4, 0x0, 0x0, 0x0,
-    0x20, 0x0, 0x0, 0x0, 0x2, 0x5, 0xa, 0x0, 0x4, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x1, 0x6,
+    0x20, 0x0, 0x0, 0x0, 0x2, 0x5, 0xa, 0x0, 0x4, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0, 0x0, 0x6,
     0xa, 0x0, 0x4, 0x0, 0x0, 0x0, 0x20, 0x0, 0x0, 0x0,
 ];
 
@@ -259,6 +259,7 @@ lazy_static! {
             bottom: 743,
         },
         bitmap_data_length: 201,
+        bitmap_data:  (&WIRE_TO_SURFACE_1_BUFFER[17..]).to_vec(),
     };
     pub static ref WIRE_TO_SURFACE_1_BITMAP_DATA: Vec<u8> =
         (&WIRE_TO_SURFACE_1_BUFFER[17..]).to_vec();
@@ -268,6 +269,7 @@ lazy_static! {
         codec_context_id: 4,
         pixel_format: PixelFormat::XRgb,
         bitmap_data_length: 616,
+        bitmap_data: (&WIRE_TO_SURFACE_2_BUFFER[13..]).to_vec(),
     };
     pub static ref WIRE_TO_SURFACE_2_BITMAP_DATA: Vec<u8> =
         (&WIRE_TO_SURFACE_2_BUFFER[13..]).to_vec();
@@ -476,14 +478,12 @@ fn from_buffer_correctly_parses_wire_to_surface_1_pdu() {
         *WIRE_TO_SURFACE_1,
         WireToSurface1Pdu::from_buffer(&mut buffer).unwrap()
     );
-    assert_eq!(WIRE_TO_SURFACE_1_BITMAP_DATA.as_slice(), buffer);
 }
 
 #[test]
 fn to_buffer_correctly_serializes_wire_to_surface_1_pdu() {
     let mut buffer = Vec::with_capacity(1024);
     WIRE_TO_SURFACE_1.to_buffer(&mut buffer).unwrap();
-    buffer.extend_from_slice(WIRE_TO_SURFACE_1_BITMAP_DATA.as_slice());
 
     assert_eq!(buffer, WIRE_TO_SURFACE_1_BUFFER.as_ref());
 }
@@ -492,7 +492,7 @@ fn to_buffer_correctly_serializes_wire_to_surface_1_pdu() {
 fn buffer_length_is_correct_for_wire_to_surface_1_pdu() {
     assert_eq!(
         WIRE_TO_SURFACE_1_BUFFER.len(),
-        WIRE_TO_SURFACE_1.buffer_length() + WIRE_TO_SURFACE_1_BITMAP_DATA.len()
+        WIRE_TO_SURFACE_1.buffer_length()
     );
 }
 
@@ -504,14 +504,12 @@ fn from_buffer_correctly_parses_wire_to_surface_2_pdu() {
         *WIRE_TO_SURFACE_2,
         WireToSurface2Pdu::from_buffer(&mut buffer).unwrap()
     );
-    assert_eq!(WIRE_TO_SURFACE_2_BITMAP_DATA.as_slice(), buffer);
 }
 
 #[test]
 fn to_buffer_correctly_serializes_wire_to_surface_2_pdu() {
     let mut buffer = Vec::with_capacity(WIRE_TO_SURFACE_2_BUFFER.len());
     WIRE_TO_SURFACE_2.to_buffer(&mut buffer).unwrap();
-    buffer.extend_from_slice(WIRE_TO_SURFACE_2_BITMAP_DATA.as_slice());
 
     assert_eq!(buffer, WIRE_TO_SURFACE_2_BUFFER.as_ref());
 }
@@ -520,7 +518,7 @@ fn to_buffer_correctly_serializes_wire_to_surface_2_pdu() {
 fn buffer_length_is_correct_for_wire_to_surface_2_pdu() {
     assert_eq!(
         WIRE_TO_SURFACE_2_BUFFER.len(),
-        WIRE_TO_SURFACE_2.buffer_length() + WIRE_TO_SURFACE_2_BITMAP_DATA.len()
+        WIRE_TO_SURFACE_2.buffer_length()
     );
 }
 

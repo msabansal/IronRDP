@@ -1,29 +1,36 @@
 mod config;
 
 use std::{
-    io::{self, Write},
+    convert::TryFrom,
+    io::{self, Read, Write},
     net::TcpStream,
     sync::Arc,
 };
 
 use log::error;
-use rustls::Session;
+use rustls::{RootCertStore, ServerName};
 
 use self::config::Config;
-use ironrdp_client::{process_active_stage, process_connection_sequence, RdpError, UpgradedStream};
+use ironrdp_client::{
+    connection_sequence::process_auth, process_active_stage, process_connection_sequence, RdpError,
+    UpgradedStream,
+};
 
 mod danger {
+
     pub struct NoCertificateVerification {}
 
-    impl rustls::ServerCertVerifier for NoCertificateVerification {
+    impl rustls::client::ServerCertVerifier for NoCertificateVerification {
         fn verify_server_cert(
             &self,
-            _roots: &rustls::RootCertStore,
-            _presented_certs: &[rustls::Certificate],
-            _dns_name: webpki::DNSNameRef<'_>,
-            _ocsp: &[u8],
-        ) -> Result<rustls::ServerCertVerified, rustls::TLSError> {
-            Ok(rustls::ServerCertVerified::assertion())
+            _end_entity: &rustls::Certificate,
+            _intermediates: &[rustls::Certificate],
+            _server_name: &rustls::ServerName,
+            _scts: &mut dyn Iterator<Item = &[u8]>,
+            _ocsp_response: &[u8],
+            _now: std::time::SystemTime,
+        ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+            Ok(rustls::client::ServerCertVerified::assertion())
         }
     }
 }
@@ -75,18 +82,51 @@ fn setup_logging(log_file: &str) -> Result<(), fern::InitError> {
     Ok(())
 }
 
+struct Stream<T: io::Read + io::Write> {
+    inner: T,
+}
+
+impl<T: io::Read + io::Write> Write for Stream<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        log::info!("Writing {} bytes", buf.len());
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<T: io::Read + io::Write> Read for Stream<T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let ret = self.inner.read(buf);
+        let zero = 0usize;
+        log::info!("read {} bytes", ret.as_ref().unwrap_or(&zero));
+        ret
+    }
+}
+
 fn run(config: Config) -> Result<(), RdpError> {
     let addr = socket_addr_to_string(config.routing_addr);
     let mut stream = TcpStream::connect(addr.as_str()).map_err(RdpError::ConnectionError)?;
 
-    let (connection_sequence_result, mut stream) = process_connection_sequence(
+    let (selected_protocol, mut stream) = process_auth(
         &mut stream,
-        &config.routing_addr,
-        &config.input,
+        config.input.security_protocol,
+        &config.input.credentials,
         establish_tls,
     )?;
 
-    process_active_stage(&mut stream, config.input, connection_sequence_result)?;
+    let mut stream = Stream { inner: stream };
+
+    let connection_sequence_result = process_connection_sequence(
+        &mut stream,
+        selected_protocol,
+        &config.routing_addr,
+        &config.input,
+    )?;
+
+    process_active_stage(&mut stream.inner, config.input, connection_sequence_result)?;
 
     Ok(())
 }
@@ -94,23 +134,31 @@ fn run(config: Config) -> Result<(), RdpError> {
 fn establish_tls(
     stream: impl io::Read + io::Write,
 ) -> Result<UpgradedStream<impl io::Read + io::Write>, RdpError> {
-    let mut client_config = rustls::ClientConfig::default();
+    let root_store = RootCertStore::empty();
+
+    let mut client_config = rustls::ClientConfig::builder()
+        .with_safe_default_cipher_suites()
+        .with_safe_default_kx_groups()
+        .with_safe_default_protocol_versions()?
+        .with_root_certificates(root_store)
+        .with_no_client_auth();
 
     client_config
         .dangerous()
         .set_certificate_verifier(Arc::new(danger::NoCertificateVerification {}));
+
     let config_ref = Arc::new(client_config);
-    let dns_name = webpki::DNSNameRef::try_from_ascii_str("stub_string").unwrap();
-    let tls_session = rustls::ClientSession::new(&config_ref, dns_name);
+    let dns_name = ServerName::try_from("stub-name.com").expect("invalid DNS name");
+    let tls_session = rustls::ClientConnection::new(config_ref, dns_name)?;
     let mut tls_stream = rustls::StreamOwned::new(tls_session, stream);
     // handshake
     tls_stream.flush()?;
 
     let cert = tls_stream
-        .sess
-        .get_peer_certificates()
+        .conn
+        .peer_certificates()
         .ok_or(RdpError::TlsConnectorError(
-            rustls::TLSError::NoCertificatesPresented,
+            rustls::Error::NoCertificatesPresented,
         ))?;
     let server_public_key = get_tls_peer_pubkey(cert[0].as_ref().to_vec())?;
 

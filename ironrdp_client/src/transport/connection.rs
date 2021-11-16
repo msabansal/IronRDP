@@ -5,7 +5,7 @@ use ironrdp::{nego, PduParsing};
 use log::debug;
 use sspi::internal::credssp;
 
-use super::{DataTransport, Decoder, Encoder};
+use super::{Decoder, Encoder};
 use crate::RdpError;
 
 const MAX_TS_REQUEST_LENGTH_BUFFER_SIZE: usize = 4;
@@ -74,7 +74,7 @@ pub fn connect(
     mut stream: impl io::Read + io::Write,
     security_protocol: nego::SecurityProtocol,
     username: String,
-) -> Result<(DataTransport, nego::SecurityProtocol), RdpError> {
+) -> Result<nego::SecurityProtocol, RdpError> {
     let selected_protocol = process_negotiation(
         &mut stream,
         Some(nego::NegoData::Cookie(username)),
@@ -83,7 +83,7 @@ pub fn connect(
         0,
     )?;
 
-    Ok((DataTransport::default(), selected_protocol))
+    Ok(selected_protocol)
 }
 
 fn process_negotiation(

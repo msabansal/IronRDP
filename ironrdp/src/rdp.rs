@@ -44,7 +44,7 @@ use self::{
     client_info::ClientInfoError, finalization_messages::FinalizationMessagesError,
     server_license::ServerLicenseError,
 };
-use crate::{impl_from_error, PduParsing};
+use crate::{impl_from_error, input::InputEventError, PduParsing};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClientInfoPdu {
@@ -114,6 +114,8 @@ pub enum RdpError {
     SaveSessionInfoError(session_info::SessionError),
     #[fail(display = "Server set error info PDU error: {}", _0)]
     ServerSetErrorInfoError(ServerSetErrorInfoError),
+    #[fail(display = "Input event PDU error: Err: {}", _0)]
+    InputEventError(InputEventError),
 }
 
 impl_from_error!(io::Error, RdpError, RdpError::IOError);
@@ -130,11 +132,14 @@ impl_from_error!(
     RdpError,
     RdpError::SaveSessionInfoError
 );
+
 impl_from_error!(
     ServerSetErrorInfoError,
     RdpError,
     RdpError::ServerSetErrorInfoError
 );
+
+impl_from_error!(InputEventError, RdpError, RdpError::InputEventError);
 
 impl From<RdpError> for io::Error {
     fn from(e: RdpError) -> io::Error {
