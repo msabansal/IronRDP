@@ -1,5 +1,3 @@
-use std::ptr::null;
-
 use ironrdp::{
     dvc::gfx::{
         zgfx, CapabilitiesAdvertisePdu, CapabilitiesV8Flags, CapabilitiesV81Flags,

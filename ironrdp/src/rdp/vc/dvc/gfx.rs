@@ -68,29 +68,17 @@ impl PduParsing for ServerPdu {
         }
 
         let (server_pdu, buffer_length) = match pdu_type {
-            ServerPduType::WireToSurface1 => {
-                let pdu = WireToSurface1Pdu::from_buffer(&mut stream)?;
-                let bitmap_data_length = pdu.bitmap_data_length;
-
-                let pdu = ServerPdu::WireToSurface1(pdu);
-                let buffer_length = pdu.buffer_length() + bitmap_data_length;
-
-                (pdu, buffer_length)
-            }
-            ServerPduType::WireToSurface2 => {
-                let pdu = WireToSurface2Pdu::from_buffer(&mut stream)?;
-                let bitmap_data_length = pdu.bitmap_data_length;
-
-                let pdu = ServerPdu::WireToSurface2(pdu);
-                let buffer_length = pdu.buffer_length() + bitmap_data_length;
-
-                (pdu, buffer_length)
-            }
             _ => {
                 let pdu = match pdu_type {
                     ServerPduType::DeleteEncodingContext => ServerPdu::DeleteEncodingContext(
                         DeleteEncodingContextPdu::from_buffer(&mut stream)?,
                     ),
+                    ServerPduType::WireToSurface1 => {
+                        ServerPdu::WireToSurface1(WireToSurface1Pdu::from_buffer(&mut stream)?)
+                    }
+                    ServerPduType::WireToSurface2 => {
+                        ServerPdu::WireToSurface2(WireToSurface2Pdu::from_buffer(&mut stream)?)
+                    }
                     ServerPduType::SolidFill => {
                         ServerPdu::SolidFill(SolidFillPdu::from_buffer(&mut stream)?)
                     }
@@ -136,7 +124,6 @@ impl PduParsing for ServerPdu {
                     ServerPduType::MapSurfaceToScaledWindow => ServerPdu::MapSurfaceToScaledWindow(
                         MapSurfaceToScaledWindowPdu::from_buffer(&mut stream)?,
                     ),
-                    ServerPduType::WireToSurface1 | ServerPduType::WireToSurface2 => unreachable!(),
                     _ => return Err(GraphicsPipelineError::UnexpectedServerPduType(pdu_type)),
                 };
                 let buffer_length = pdu.buffer_length();

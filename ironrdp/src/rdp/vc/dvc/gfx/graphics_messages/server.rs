@@ -1,4 +1,5 @@
 use std::io;
+use std::fmt;
 
 use bit_field::BitField;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -16,13 +17,14 @@ pub const RESET_GRAPHICS_PDU_SIZE: usize = 340;
 const MAX_RESET_GRAPHICS_WIDTH_HEIGHT: u32 = 32_766;
 const MONITOR_COUNT_MAX: u32 = 16;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct WireToSurface1Pdu {
     pub surface_id: u16,
     pub codec_id: Codec1Type,
     pub pixel_format: PixelFormat,
     pub destination_rectangle: Rectangle,
     pub bitmap_data_length: usize,
+    pub bitmap_data: Vec<u8>,
 }
 
 impl PduParsing for WireToSurface1Pdu {
@@ -36,14 +38,15 @@ impl PduParsing for WireToSurface1Pdu {
             .ok_or(GraphicsMessagesError::InvalidFixelFormat)?;
         let destination_rectangle = Rectangle::from_buffer(&mut stream)?;
         let bitmap_data_length = stream.read_u32::<LittleEndian>()? as usize;
-        let mut _buffer = vec![0; bitmap_data_length];
-        stream.read_exact(&mut _buffer)?;
+        let mut bitmap_data = vec![0; bitmap_data_length];
+        stream.read_exact(&mut bitmap_data)?;
         Ok(Self {
             surface_id,
             codec_id,
             pixel_format,
             destination_rectangle,
             bitmap_data_length,
+            bitmap_data,
         })
     }
 
@@ -53,23 +56,35 @@ impl PduParsing for WireToSurface1Pdu {
         stream.write_u8(self.pixel_format.to_u8().unwrap())?;
         self.destination_rectangle.to_buffer(&mut stream)?;
         stream.write_u32::<LittleEndian>(self.bitmap_data_length as u32)?;
-        let mut _buffer = vec![0; self.bitmap_data_length];
-        stream.write_all(&mut _buffer)?;
+        stream.write_all(&self.bitmap_data)?;
         Ok(())
     }
 
     fn buffer_length(&self) -> usize {
-        17
+        17 + self.bitmap_data_length
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+impl fmt::Debug for WireToSurface1Pdu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WireToSurface1Pdu")
+            .field("surface_id", &self.surface_id)
+            .field("codec_id", &self.codec_id)
+            .field("pixel_format", &self.pixel_format)
+            .field("destination_rectangle", &self.destination_rectangle)
+            .field("bitmap_data_length", &self.bitmap_data_length)
+            .finish()
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct WireToSurface2Pdu {
     pub surface_id: u16,
     pub codec_id: Codec2Type,
     pub codec_context_id: u32,
     pub pixel_format: PixelFormat,
     pub bitmap_data_length: usize,
+    pub bitmap_data: Vec<u8>,
 }
 
 impl PduParsing for WireToSurface2Pdu {
@@ -83,13 +98,16 @@ impl PduParsing for WireToSurface2Pdu {
         let pixel_format = PixelFormat::from_u8(stream.read_u8()?)
             .ok_or(GraphicsMessagesError::InvalidFixelFormat)?;
         let bitmap_data_length = stream.read_u32::<LittleEndian>()? as usize;
-
+        let mut bitmap_data = vec![0; bitmap_data_length];
+        stream.read_exact(&mut bitmap_data)?;
+        
         Ok(Self {
             surface_id,
             codec_id,
             codec_context_id,
             pixel_format,
             bitmap_data_length,
+            bitmap_data,
         })
     }
 
@@ -99,12 +117,25 @@ impl PduParsing for WireToSurface2Pdu {
         stream.write_u32::<LittleEndian>(self.codec_context_id)?;
         stream.write_u8(self.pixel_format.to_u8().unwrap())?;
         stream.write_u32::<LittleEndian>(self.bitmap_data_length as u32)?;
-
+        stream.write_all(&self.bitmap_data)?;
+        
         Ok(())
     }
 
     fn buffer_length(&self) -> usize {
-        13
+        13 + self.bitmap_data_length
+    }
+}
+
+impl fmt::Debug for WireToSurface2Pdu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WireToSurface2Pdu")
+        .field("surface_id", &self.surface_id)
+        .field("codec_id", &self.codec_id)
+        .field("codec_context_id", &self.codec_context_id)
+        .field("pixel_format", &self.pixel_format)
+        .field("bitmap_data_length", &self.bitmap_data_length)
+        .finish()
     }
 }
 
