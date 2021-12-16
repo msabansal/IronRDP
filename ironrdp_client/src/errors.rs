@@ -20,9 +20,9 @@ pub enum RdpError {
     #[fail(display = "invalid response: {}", _0)]
     InvalidResponse(String),
     #[fail(display = "TLS connector error: {}", _0)]
-    TlsConnectorError(rustls::TLSError),
+    TlsConnectorError(rustls::Error),
     #[fail(display = "TLS handshake error: {}", _0)]
-    TlsHandshakeError(rustls::TLSError),
+    TlsHandshakeError(rustls::Error),
     #[fail(display = "CredSSP error: {}", _0)]
     CredSspError(#[fail(cause)] sspi::Error),
     #[fail(display = "CredSSP TSRequest error: {}", _0)]
@@ -86,11 +86,11 @@ impl From<io::Error> for RdpError {
     }
 }
 
-impl From<rustls::TLSError> for RdpError {
-    fn from(e: rustls::TLSError) -> Self {
+impl From<rustls::Error> for RdpError {
+    fn from(e: rustls::Error) -> Self {
         match e {
-            rustls::TLSError::InappropriateHandshakeMessage { .. }
-            | rustls::TLSError::HandshakeNotComplete => RdpError::TlsHandshakeError(e),
+            rustls::Error::InappropriateHandshakeMessage { .. }
+            | rustls::Error::HandshakeNotComplete => RdpError::TlsHandshakeError(e),
             _ => RdpError::TlsConnectorError(e),
         }
     }

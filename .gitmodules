@@ -1,4 +1,0 @@
-[submodule "ring"]
-	path = ring
-	url = https://github.com/briansmith/ring.git
-	branch = b/curve25519-wasm

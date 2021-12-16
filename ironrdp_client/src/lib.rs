@@ -11,7 +11,8 @@ pub use self::{
     errors::RdpError,
 };
 
-use ironrdp::{gcc, nego};
+pub use ironrdp::{gcc, nego};
+pub use sspi::AuthIdentity;
 
 const BUF_STREAM_SIZE: usize = 32 * 1024;
 
