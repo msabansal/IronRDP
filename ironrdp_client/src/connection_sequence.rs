@@ -20,7 +20,7 @@ use ironrdp::{
         },
         ErrorInfo, ServerSetErrorInfoPdu, SERVER_CHANNEL_ID,
     },
-    PduParsing,
+    PduParsing, SecurityProtocol,
 };
 use log::{debug, info, trace, warn};
 use ring::rand::SecureRandom;
@@ -50,13 +50,12 @@ where
     pub stream: S,
     pub server_public_key: Vec<u8>,
 }
-
-pub fn process_connection_sequence<F, S, US>(
+pub fn process_auth<F, S, US>(
     stream: S,
-    routing_addr: &SocketAddr,
-    config: &InputConfig,
+    security_protocol: SecurityProtocol,
+    credentials: &sspi::AuthIdentity,
     upgrade_stream: F,
-) -> Result<(ConnectionSequenceResult, BufStream<US>), RdpError>
+) -> Result<(SecurityProtocol, BufStream<US>), RdpError>
 where
     S: io::Read + io::Write,
     US: io::Read + io::Write,
@@ -64,11 +63,7 @@ where
 {
     let mut stream = BufStream::new(stream);
 
-    let (mut transport, selected_protocol) = connect(
-        &mut stream,
-        config.security_protocol,
-        config.credentials.username.clone(),
-    )?;
+    let selected_protocol = connect(&mut stream, security_protocol, credentials.username.clone())?;
 
     let stream = stream.into_inner().map_err(io::Error::from)?;
     let UpgradedStream {
@@ -80,7 +75,7 @@ where
     if selected_protocol.contains(nego::SecurityProtocol::HYBRID)
         || selected_protocol.contains(nego::SecurityProtocol::HYBRID_EX)
     {
-        process_cred_ssp(&mut stream, config.credentials.clone(), server_public_key)?;
+        process_cred_ssp(&mut stream, credentials.clone(), server_public_key)?;
 
         if selected_protocol.contains(nego::SecurityProtocol::HYBRID_EX) {
             if let credssp::EarlyUserAuthResult::AccessDenied =
@@ -91,8 +86,22 @@ where
         }
     }
 
+    return Ok((selected_protocol, stream));
+}
+
+pub fn process_connection_sequence<S>(
+    mut stream: S,
+    security_protocol: SecurityProtocol,
+    routing_addr: &SocketAddr,
+    config: &InputConfig,
+) -> Result<ConnectionSequenceResult, RdpError>
+where
+    S: io::Read + io::Write,
+{
+    let mut transport = DataTransport::default();
+
     let static_channels =
-        process_mcs_connect(&mut stream, &mut transport, &config, selected_protocol)?;
+        process_mcs_connect(&mut stream, &mut transport, &config, security_protocol)?;
 
     let mut transport = McsTransport::new(transport);
     let joined_static_channels =
@@ -126,15 +135,12 @@ where
     let mut transport = ShareDataHeaderTransport::new(transport);
     process_finalization(&mut stream, &mut transport, initiator_id)?;
 
-    Ok((
-        ConnectionSequenceResult {
-            desktop_sizes,
-            joined_static_channels,
-            global_channel_id,
-            initiator_id,
-        },
-        stream,
-    ))
+    Ok(ConnectionSequenceResult {
+        desktop_sizes,
+        joined_static_channels,
+        global_channel_id,
+        initiator_id,
+    })
 }
 
 pub fn process_cred_ssp(

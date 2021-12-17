@@ -11,7 +11,10 @@ use log::error;
 use rustls::{RootCertStore, ServerName};
 
 use self::config::Config;
-use ironrdp_client::{process_active_stage, process_connection_sequence, RdpError, UpgradedStream};
+use ironrdp_client::{
+    connection_sequence::process_auth, process_active_stage, process_connection_sequence, RdpError,
+    UpgradedStream,
+};
 
 mod danger {
 
@@ -83,11 +86,18 @@ fn run(config: Config) -> Result<(), RdpError> {
     let addr = socket_addr_to_string(config.routing_addr);
     let mut stream = TcpStream::connect(addr.as_str()).map_err(RdpError::ConnectionError)?;
 
-    let (connection_sequence_result, mut stream) = process_connection_sequence(
+    let (selected_protocol, mut stream) = process_auth(
         &mut stream,
+        config.input.security_protocol,
+        &config.input.credentials,
+        establish_tls,
+    )?;
+
+    let connection_sequence_result = process_connection_sequence(
+        &mut stream,
+        selected_protocol,
         &config.routing_addr,
         &config.input,
-        establish_tls,
     )?;
 
     process_active_stage(&mut stream, config.input, connection_sequence_result)?;
