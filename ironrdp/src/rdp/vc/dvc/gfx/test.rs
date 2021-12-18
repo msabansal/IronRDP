@@ -2,8 +2,7 @@ use lazy_static::lazy_static;
 
 use super::{
     graphics_messages::test::{
-        FRAME_ACKNOWLEDGE, FRAME_ACKNOWLEDGE_BUFFER, WIRE_TO_SURFACE_1,
-        WIRE_TO_SURFACE_1_BITMAP_DATA, WIRE_TO_SURFACE_1_BUFFER,
+        FRAME_ACKNOWLEDGE, FRAME_ACKNOWLEDGE_BUFFER, WIRE_TO_SURFACE_1, WIRE_TO_SURFACE_1_BUFFER,
     },
     *,
 };

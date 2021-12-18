@@ -2,7 +2,7 @@ mod config;
 
 use std::{
     convert::TryFrom,
-    io::{self, Write},
+    io::{self, Read, Write},
     net::TcpStream,
     sync::Arc,
 };
@@ -82,6 +82,30 @@ fn setup_logging(log_file: &str) -> Result<(), fern::InitError> {
     Ok(())
 }
 
+struct Stream<T: io::Read + io::Write> {
+    inner: T,
+}
+
+impl<T: io::Read + io::Write> Write for Stream<T> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        log::info!("Writing {} bytes", buf.len());
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+impl<T: io::Read + io::Write> Read for Stream<T> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let ret = self.inner.read(buf);
+        let zero = 0usize;
+        log::info!("read {} bytes", ret.as_ref().unwrap_or(&zero));
+        ret
+    }
+}
+
 fn run(config: Config) -> Result<(), RdpError> {
     let addr = socket_addr_to_string(config.routing_addr);
     let mut stream = TcpStream::connect(addr.as_str()).map_err(RdpError::ConnectionError)?;
@@ -93,6 +117,8 @@ fn run(config: Config) -> Result<(), RdpError> {
         establish_tls,
     )?;
 
+    let mut stream = Stream { inner: stream };
+
     let connection_sequence_result = process_connection_sequence(
         &mut stream,
         selected_protocol,
@@ -100,7 +126,7 @@ fn run(config: Config) -> Result<(), RdpError> {
         &config.input,
     )?;
 
-    process_active_stage(&mut stream, config.input, connection_sequence_result)?;
+    process_active_stage(&mut stream.inner, config.input, connection_sequence_result)?;
 
     Ok(())
 }

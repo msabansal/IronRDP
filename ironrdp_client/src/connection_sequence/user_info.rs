@@ -1,10 +1,11 @@
-use std::{env, net, str::FromStr};
+use std::{env, io::ErrorKind, net, path::PathBuf, str::FromStr};
 
 use ironrdp::{
     gcc::{
-        ClientCoreData, ClientCoreOptionalData, ClientEarlyCapabilityFlags, ClientGccBlocks,
-        ClientNetworkData, ClientSecurityData, ColorDepth, ConnectionType, HighColorDepth,
-        RdpVersion, SecureAccessSequence, SupportedColorDepths, ChannelOptions, Channel
+        Channel, ChannelOptions, ClientCoreData, ClientCoreOptionalData,
+        ClientEarlyCapabilityFlags, ClientGccBlocks, ClientNetworkData, ClientSecurityData,
+        ColorDepth, ConnectionType, HighColorDepth, RdpVersion, SecureAccessSequence,
+        SupportedColorDepths,
     },
     nego::SecurityProtocol,
     rdp::{
@@ -74,6 +75,12 @@ pub fn create_client_info_pdu(
             },
             address: routing_addr.ip().to_string(),
             dir: env::current_dir()
+                .or_else(|e| {
+                    if e.kind() == ErrorKind::Unsupported {
+                        return Ok(PathBuf::from("/home/sabansal/github/msabansal/IronRDP"));
+                    }
+                    Err(e)
+                })
                 .map_err(|e| {
                     RdpError::UserInfoError(format!(
                         "Failed to get current directory path: {:?}",
@@ -192,7 +199,7 @@ fn create_network_data() -> ClientNetworkData {
     ClientNetworkData {
         channels: vec![Channel {
             name: String::from_str("drdynvc").unwrap(),
-            options: ChannelOptions::COMPRESS_RDP
+            options: ChannelOptions::COMPRESS_RDP,
         }],
     }
 }

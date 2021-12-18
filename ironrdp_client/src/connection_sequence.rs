@@ -290,7 +290,9 @@ pub fn process_mcs(
         )));
     };
 
-    for (_, id) in static_channels.iter() {
+    let mut channels: Vec<u16> = static_channels.iter().map(|(_, id)| *id).collect();
+    channels.sort();
+    for id in channels.iter() {
         let channel_join_request = ironrdp::mcs::ChannelJoinRequestPdu {
             initiator_id,
             channel_id: *id,
