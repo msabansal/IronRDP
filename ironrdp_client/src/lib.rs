@@ -3,7 +3,7 @@ pub mod connection_sequence;
 pub mod transport;
 
 mod errors;
-mod utils;
+pub mod utils;
 
 pub use self::{
     active_session::process_active_stage,

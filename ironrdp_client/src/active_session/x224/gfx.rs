@@ -1,8 +1,8 @@
 use ironrdp::{
     dvc::gfx::{
-        zgfx, CapabilitiesAdvertisePdu, CapabilitiesV8Flags, CapabilitiesV81Flags,
-        CapabilitiesV10Flags, CapabilitiesV104Flags, CapabilitySet, ClientPdu,
-        FrameAcknowledgePdu, QueueDepth, ServerPdu,
+        zgfx, CapabilitiesAdvertisePdu, CapabilitiesV104Flags, CapabilitiesV10Flags,
+        CapabilitiesV81Flags, CapabilitiesV8Flags, CapabilitySet, ClientPdu, FrameAcknowledgePdu,
+        QueueDepth, ServerPdu,
     },
     PduParsing,
 };
@@ -45,39 +45,39 @@ impl DynamicChannelDataHandler for Handler {
             if let ServerPdu::EndFrame(end_frame_pdu) = gfx_pdu {
                 self.frames_decoded += 1;
                 let client_pdu = ClientPdu::FrameAcknowledge(FrameAcknowledgePdu {
-                    queue_depth: QueueDepth::Suspend,
+                    queue_depth: QueueDepth::Unavailable,
                     frame_id: end_frame_pdu.frame_id,
                     total_frames_decoded: self.frames_decoded,
                 });
                 debug!("Sending GFX PDU: {:?}", client_pdu);
                 client_pdu_buffer.reserve(client_pdu_buffer.len() + client_pdu.buffer_length());
                 client_pdu.to_buffer(&mut client_pdu_buffer)?;
-            } 
+            }
         }
 
         if client_pdu_buffer.len() > 0 {
             return Ok(Some(client_pdu_buffer));
         }
-        
+
         return Ok(None);
     }
 }
 
 pub fn create_capabilities_advertise() -> Result<Vec<u8>, RdpError> {
-    let capabilities_advertise =
-        ClientPdu::CapabilitiesAdvertise(CapabilitiesAdvertisePdu(vec![
-            CapabilitySet::V8 {
-                flags: CapabilitiesV8Flags::empty(),
-            },
-            CapabilitySet::V8_1 {
-                flags: CapabilitiesV81Flags::AVC420_ENABLED,
-            },
-            CapabilitySet::V10 {
+    let capabilities_advertise = ClientPdu::CapabilitiesAdvertise(CapabilitiesAdvertisePdu(vec![
+        CapabilitySet::V8 {
+            flags: CapabilitiesV8Flags::empty(),
+        },
+        CapabilitySet::V8_1 {
+            flags: CapabilitiesV81Flags::AVC420_ENABLED,
+        },
+        CapabilitySet::V10 {
             flags: CapabilitiesV10Flags::empty(),
         },
         CapabilitySet::V10_6 {
-            flags: CapabilitiesV104Flags::SMALL_CACHE |  CapabilitiesV104Flags::AVC_THIN_CLIENT,
-        }]));
+            flags: CapabilitiesV104Flags::SMALL_CACHE | CapabilitiesV104Flags::AVC_THIN_CLIENT,
+        },
+    ]));
     let mut capabilities_advertise_buffer =
         Vec::with_capacity(capabilities_advertise.buffer_length());
     capabilities_advertise.to_buffer(&mut capabilities_advertise_buffer)?;

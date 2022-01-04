@@ -1,6 +1,6 @@
 mod codecs;
-mod fast_path;
-mod x224;
+pub mod fast_path;
+pub mod x224;
 
 use std::{
     io,
@@ -96,13 +96,13 @@ pub struct DecodedImage {
 }
 
 impl DecodedImage {
-    fn new(width: u32, height: u32, pixel_format: PixelFormat) -> Self {
+    pub fn new(width: u32, height: u32, pixel_format: PixelFormat) -> Self {
         Self {
             data: vec![0; (width * height * u32::from(pixel_format.bytes_per_pixel())) as usize],
         }
     }
 
-    fn get_mut(&mut self) -> &mut [u8] {
+    pub fn get_mut(&mut self) -> &mut [u8] {
         self.data.as_mut_slice()
     }
 }
