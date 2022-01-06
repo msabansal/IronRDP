@@ -35,6 +35,7 @@ pub fn process_active_stage(
     let mut x224_processor = x224::Processor::new(
         utils::swap_hashmap_kv(connection_sequence_result.joined_static_channels),
         config.global_channel_name.as_str(),
+        None,
     );
     let mut fast_path_processor = fast_path::ProcessorBuilder {
         decoded_image,

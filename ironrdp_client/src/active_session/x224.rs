@@ -2,7 +2,9 @@ mod gfx;
 
 use std::{cmp, collections::HashMap, io};
 
+use futures_channel::mpsc;
 use ironrdp::{
+    dvc::gfx::ServerPdu,
     rdp::{
         vc::{self, dvc},
         ErrorInfo, ProtocolIndependentCode, ServerSetErrorInfoPdu,
@@ -25,14 +27,20 @@ pub struct Processor<'a> {
     static_channels: HashMap<u16, String>,
     dynamic_channels: HashMap<u32, DynamicChannel>,
     global_channel_name: &'a str,
+    message_handler: Option<mpsc::UnboundedSender<ServerPdu>>,
 }
 
 impl<'a> Processor<'a> {
-    pub fn new(static_channels: HashMap<u16, String>, global_channel_name: &'a str) -> Self {
+    pub fn new(
+        static_channels: HashMap<u16, String>,
+        global_channel_name: &'a str,
+        message_handler: Option<mpsc::UnboundedSender<ServerPdu>>,
+    ) -> Self {
         Self {
             static_channels,
             dynamic_channels: HashMap::new(),
             global_channel_name,
+            message_handler,
         }
     }
 
@@ -99,9 +107,10 @@ impl<'a> Processor<'a> {
             dvc::ServerPdu::CreateRequest(create_request) => {
                 debug!("Got DVC Create Request PDU: {:?}", create_request);
 
-                let creation_status = if let Some(dyncamic_channel) =
-                    create_dvc(create_request.channel_name.as_str())
-                {
+                let creation_status = if let Some(dyncamic_channel) = create_dvc(
+                    create_request.channel_name.as_str(),
+                    self.message_handler.clone(),
+                ) {
                     self.dynamic_channels
                         .insert(create_request.channel_id, dyncamic_channel);
 
@@ -229,9 +238,14 @@ fn process_global_channel_pdu(
     }
 }
 
-fn create_dvc(channel_name: &str) -> Option<DynamicChannel> {
+fn create_dvc(
+    channel_name: &str,
+    message_handler: Option<mpsc::UnboundedSender<ServerPdu>>,
+) -> Option<DynamicChannel> {
     match channel_name {
-        RDP8_GRAPHICS_PIPELINE_NAME => Some(DynamicChannel::new(Box::new(gfx::Handler::new()))),
+        RDP8_GRAPHICS_PIPELINE_NAME => Some(DynamicChannel::new(Box::new(gfx::Handler::new(
+            message_handler,
+        )))),
         _ => None,
     }
 }
