@@ -27,6 +27,10 @@ impl StaticVirtualChannelTransport {
             transport,
         }
     }
+
+    pub fn set_channel_ids(&mut self, channel_ids: ChannelIdentificators) {
+        self.channel_ids = channel_ids;
+    }
 }
 
 impl Encoder for StaticVirtualChannelTransport {
@@ -47,7 +51,6 @@ impl Encoder for StaticVirtualChannelTransport {
             Vec::with_capacity(channel_header.buffer_length() + channel_data_buffer.len());
         channel_header.to_buffer(&mut channel_buffer)?;
         channel_buffer.append(&mut channel_data_buffer);
-
         self.transport.set_channel_ids(self.channel_ids);
         self.transport.encode(channel_buffer, &mut stream)
     }

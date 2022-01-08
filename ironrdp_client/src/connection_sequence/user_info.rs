@@ -22,7 +22,7 @@ use ironrdp::{
         },
         AddressFamily, BasicSecurityHeader, BasicSecurityHeaderFlags, ClientInfo, ClientInfoFlags,
         ClientInfoPdu, CompressionType, Credentials, ExtendedClientInfo,
-        ExtendedClientOptionalInfo, SERVER_CHANNEL_ID,
+        ExtendedClientOptionalInfo, PerformanceFlags, SERVER_CHANNEL_ID,
     },
     CapabilitySet, ClientConfirmActive,
 };
@@ -56,6 +56,8 @@ pub fn create_client_info_pdu(
     let security_header = BasicSecurityHeader {
         flags: BasicSecurityHeaderFlags::INFO_PKT,
     };
+    let mut optional_data = ExtendedClientOptionalInfo::default();
+    optional_data.performance_flags = Some(PerformanceFlags::ENABLE_FONT_SMOOTHING);
     let client_info = ClientInfo {
         credentials: auth_identity_to_credentials(config.credentials.clone()),
         code_page: 0, // ignored if the keyboardLayout field of the Client Core Data is set to zero
@@ -89,7 +91,7 @@ pub fn create_client_info_pdu(
                 })?
                 .to_string_lossy()
                 .to_string(),
-            optional_data: ExtendedClientOptionalInfo::default(),
+            optional_data,
         },
     };
 

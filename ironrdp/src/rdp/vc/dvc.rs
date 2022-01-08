@@ -1,4 +1,5 @@
 pub mod gfx;
+pub mod display;
 
 #[cfg(test)]
 mod tests;

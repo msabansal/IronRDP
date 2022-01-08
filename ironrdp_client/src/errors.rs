@@ -1,7 +1,7 @@
 use std::io;
 
 use failure::Fail;
-use ironrdp::{codecs, dvc::gfx, fast_path::FastPathError, nego, rdp, McsError};
+use ironrdp::{codecs, dvc::{gfx, display}, fast_path::FastPathError, nego, rdp, McsError};
 
 #[derive(Debug, Fail)]
 pub enum RdpError {
@@ -51,6 +51,8 @@ pub enum RdpError {
     InvalidChannelIdError(String),
     #[fail(display = "Graphics pipeline protocol error: {}", _0)]
     GraphicsPipelineError(gfx::GraphicsPipelineError),
+    #[fail(display = "Display pipeline protocol error: {}", _0)]
+    DisplayPipelineError(display::DisplayPipelineError),
     #[fail(display = "ZGFX error: {}", _0)]
     ZgfxError(#[fail(cause)] gfx::zgfx::ZgfxError),
     #[fail(display = "Fast-Path error: {}", _0)]
@@ -59,6 +61,8 @@ pub enum RdpError {
     RdpError(#[fail(cause)] ironrdp::RdpError),
     #[fail(display = "access to the non-existing channel: {}", _0)]
     AccessToNonExistingChannel(u32),
+    #[fail(display = "access to the non-existing channel: {}", _0)]
+    AccessToNonExistingChannelName(String),
     #[fail(display = "data in unexpected channel: {}", _0)]
     UnexpectedChannel(u16),
     #[fail(display = "unexpected Surface Command codec ID: {}", _0)]
@@ -117,6 +121,12 @@ impl From<rdp::vc::ChannelError> for RdpError {
 impl From<gfx::GraphicsPipelineError> for RdpError {
     fn from(e: gfx::GraphicsPipelineError) -> Self {
         RdpError::GraphicsPipelineError(e)
+    }
+}
+
+impl From<display::DisplayPipelineError> for RdpError {
+    fn from(e: display::DisplayPipelineError) -> Self {
+        RdpError::DisplayPipelineError(e)
     }
 }
 
