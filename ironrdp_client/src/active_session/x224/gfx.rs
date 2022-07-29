@@ -1,3 +1,4 @@
+use futures_channel::mpsc;
 use ironrdp::{
     dvc::gfx::{
         zgfx, CapabilitiesAdvertisePdu, CapabilitiesV104Flags, CapabilitiesV10Flags,
@@ -15,14 +16,16 @@ pub struct Handler {
     decompressor: zgfx::Decompressor,
     decompressed_buffer: Vec<u8>,
     frames_decoded: u32,
+    handler: Option<mpsc::UnboundedSender<ServerPdu>>,
 }
 
 impl Handler {
-    pub fn new() -> Self {
+    pub fn new(handler: Option<mpsc::UnboundedSender<ServerPdu>>) -> Self {
         Self {
             decompressor: zgfx::Decompressor::new(),
             decompressed_buffer: Vec::with_capacity(1024 * 16),
             frames_decoded: 0,
+            handler,
         }
     }
 }
@@ -41,13 +44,15 @@ impl DynamicChannelDataHandler for Handler {
             if let ServerPdu::EndFrame(end_frame_pdu) = gfx_pdu {
                 self.frames_decoded += 1;
                 let client_pdu = ClientPdu::FrameAcknowledge(FrameAcknowledgePdu {
-                    queue_depth: QueueDepth::Unavailable,
+                    queue_depth: QueueDepth::Suspend,
                     frame_id: end_frame_pdu.frame_id,
                     total_frames_decoded: self.frames_decoded,
                 });
                 debug!("Sending GFX PDU: {:?}", client_pdu);
                 client_pdu_buffer.reserve(client_pdu_buffer.len() + client_pdu.buffer_length());
                 client_pdu.to_buffer(&mut client_pdu_buffer)?;
+            } else if let Some(handler) = &self.handler {
+                handler.unbounded_send(gfx_pdu).unwrap();
             }
         }
 

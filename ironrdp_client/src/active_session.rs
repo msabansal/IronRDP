@@ -31,6 +31,7 @@ pub fn process_active_stage(
         utils::swap_hashmap_kv(connection_sequence_result.joined_static_channels),
         config.global_channel_name.as_str(),
         connection_sequence_result.initiator_id,
+        None,
     );
     let mut fast_path_processor = fast_path::ProcessorBuilder {
         decoded_image,

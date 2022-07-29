@@ -44,3 +44,4 @@ ring = "0.16.0"
 native-tls = { version = "0.2", optional = true }
 rustls = { version = "0.20", features = ["dangerous_configuration"], optional = true }
 dns-lookup = "1.0.8"
+futures-channel = "0.3"

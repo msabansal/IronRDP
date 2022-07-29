@@ -4,7 +4,9 @@ mod display;
 use std::collections::HashMap;
 use std::{cmp, io};
 
+use futures_channel::mpsc;
 use ironrdp::dvc::FieldType;
+use ironrdp::dvc::gfx::ServerPdu;
 use ironrdp::rdp::vc::{self, dvc};
 use ironrdp::rdp::{ErrorInfo, ProtocolIndependentCode, ServerSetErrorInfoPdu};
 use ironrdp::{Data, ShareDataPdu};
@@ -24,6 +26,7 @@ pub struct Processor<'a> {
     channel_map: HashMap<String, u32>,
     dynamic_channels: HashMap<u32, DynamicChannel>,
     global_channel_name: &'a str,
+    gfx_handler: Option<mpsc::UnboundedSender<ServerPdu>>,
     user_id: u16,
     drdynvc_channel_id: u16,
 }
@@ -33,6 +36,7 @@ impl<'a> Processor<'a> {
         static_channels: HashMap<u16, String>,
         global_channel_name: &'a str,
         user_id: u16,
+        gfx_handler: Option<mpsc::UnboundedSender<ServerPdu>>,
     ) -> Self {
         Self {
             static_channels,
@@ -41,6 +45,7 @@ impl<'a> Processor<'a> {
             global_channel_name,
             user_id,
             drdynvc_channel_id: 0,
+            gfx_handler,
         }
     }
 
@@ -144,6 +149,7 @@ impl<'a> Processor<'a> {
                     create_request.channel_name.as_str(),
                     create_request.channel_id,
                     create_request.channel_id_type,
+                    &self.gfx_handler
                 ) {
                     self.dynamic_channels
                         .insert(create_request.channel_id, dyncamic_channel);
@@ -269,9 +275,10 @@ fn create_dvc(
     channel_name: &str,
     channel_id: u32,
     channel_id_type: FieldType,
+    gfx_handler: &Option<mpsc::UnboundedSender<ServerPdu>>,
 ) -> Option<DynamicChannel> {
     match channel_name {
-        RDP8_GRAPHICS_PIPELINE_NAME => Some(DynamicChannel::new(Box::new(gfx::Handler::new()), channel_id, channel_id_type)),
+        RDP8_GRAPHICS_PIPELINE_NAME => Some(DynamicChannel::new(Box::new(gfx::Handler::new(gfx_handler.clone())), channel_id, channel_id_type)),
         RDP8_DISPLAY_PIPELINE_NAME => Some(DynamicChannel::new(Box::new(display::Handler::new()),
          channel_id, channel_id_type)),
         _ => {
