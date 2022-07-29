@@ -85,8 +85,7 @@ impl<'a> Processor<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn send_message_on_channel(
+    pub fn send(
         &mut self,
         mut stream: impl io::Write,
         channel_name: &str,
