@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, fmt};
 
 use bit_field::BitField;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -14,13 +14,25 @@ pub const RESET_GRAPHICS_PDU_SIZE: usize = 340;
 const MAX_RESET_GRAPHICS_WIDTH_HEIGHT: u32 = 32_766;
 const MONITOR_COUNT_MAX: u32 = 16;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct WireToSurface1Pdu {
     pub surface_id: u16,
     pub codec_id: Codec1Type,
     pub pixel_format: PixelFormat,
     pub destination_rectangle: Rectangle,
     pub bitmap_data: Vec<u8>,
+}
+
+impl fmt::Debug for WireToSurface1Pdu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WireToSurface1Pdu")
+            .field("surface_id", &self.surface_id)
+            .field("codec_id", &self.codec_id)
+            .field("pixel_format", &self.pixel_format)
+            .field("destination_rectangle", &self.destination_rectangle)
+            .field("bitmap_data_length", &self.bitmap_data.len())
+            .finish()
+    }
 }
 
 impl PduParsing for WireToSurface1Pdu {
@@ -59,13 +71,25 @@ impl PduParsing for WireToSurface1Pdu {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct WireToSurface2Pdu {
     pub surface_id: u16,
     pub codec_id: Codec2Type,
     pub codec_context_id: u32,
     pub pixel_format: PixelFormat,
     pub bitmap_data: Vec<u8>,
+}
+
+impl fmt::Debug for WireToSurface2Pdu {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("WireToSurface2Pdu")
+        .field("surface_id", &self.surface_id)
+        .field("codec_id", &self.codec_id)
+        .field("codec_context_id", &self.codec_context_id)
+        .field("pixel_format", &self.pixel_format)
+        .field("bitmap_data_length", &self.bitmap_data.len())
+        .finish()
+    }
 }
 
 impl PduParsing for WireToSurface2Pdu {
