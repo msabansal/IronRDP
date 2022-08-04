@@ -26,7 +26,7 @@ native-tls = ["dep:native-tls"]
 [dependencies]
 ironrdp = { path = "../ironrdp" }
 sspi = { version = "0.3.6", features = ["network_client"] }
-clap = "2.33"
+clap = { version = "3.2", features = ["derive", "cargo"] }
 bytes = "0.5"
 failure = "0.1"
 chrono = "0.4"
