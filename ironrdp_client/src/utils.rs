@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use num_derive::{FromPrimitive, ToPrimitive};
+pub mod cloneable_stream;
 
 #[macro_export]
 macro_rules! eof_try {

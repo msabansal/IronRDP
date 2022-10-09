@@ -28,14 +28,18 @@ impl Processor {
     pub fn process(
         &mut self,
         header: &FastPathHeader,
-        mut stream: impl io::BufRead + io::Write,
+        mut stream: impl io::Read,
+        mut output: impl io::Write,
     ) -> Result<(), RdpError> {
         debug!("Got Fast-Path Header: {:?}", header);
 
-        let input_buffer = &stream.fill_buf()?[..header.data_length];
+        let mut data = vec![0u8; header.data_length];
+        stream.read_exact(data.as_mut_slice())?;
+
+        let input_buffer = data.as_slice();
 
         let update_pdu = FastPathUpdatePdu::from_buffer(input_buffer)?;
-        let update_pdu_length = update_pdu.buffer_length();
+        // let update_pdu_length = update_pdu.buffer_length();
 
         debug!("Fast-Path Update fragmentation: {:?}", update_pdu.fragmentation);
 
@@ -43,7 +47,7 @@ impl Processor {
             .complete_data
             .process_data(update_pdu.data, update_pdu.fragmentation);
         let update_code = update_pdu.update_code;
-        stream.consume(update_pdu_length);
+        // stream.consume(update_pdu_length);
 
         if let Some(data) = processed_complete_data {
             let update = FastPathUpdate::from_buffer_with_code(data.as_slice(), update_code);
@@ -52,7 +56,7 @@ impl Processor {
                 Ok(FastPathUpdate::SurfaceCommands(surface_commands)) => {
                     info!("Received Surface Commands: {} pieces", surface_commands.len());
 
-                    self.process_surface_commands(&mut stream, surface_commands)?;
+                    self.process_surface_commands(&mut output, surface_commands)?;
                 }
                 Ok(FastPathUpdate::Bitmap(bitmap)) => {
                     info!("Received Bitmap: {:?}", bitmap);

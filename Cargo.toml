@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "ironrdp",
-    "ironrdp_client"
+    "ironrdp_client",
+    "ui_core",
+    "replay_client",
 ]
-
