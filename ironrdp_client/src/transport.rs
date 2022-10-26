@@ -1,8 +1,8 @@
-use std::io;
+use std::io::{self, Cursor, Read};
 
-use bytes::BytesMut;
+use bytes::{Buf, BytesMut};
 use ironrdp::rdp::SERVER_CHANNEL_ID;
-use ironrdp::{PduParsing, RdpPdu};
+use ironrdp::{Data, PduParsing, RdpPdu};
 use log::warn;
 
 use crate::RdpError;
@@ -28,10 +28,7 @@ pub trait Decoder {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct DataTransport {
-    data_length: usize,
-    state: TransportState,
-}
+pub struct DataTransport {}
 
 impl Default for DataTransport {
     fn default() -> Self {
@@ -41,44 +38,29 @@ impl Default for DataTransport {
 
 impl DataTransport {
     pub fn new() -> Self {
-        Self {
-            data_length: 0,
-            state: TransportState::ToDecode,
-        }
+        Self {}
     }
 
-    pub fn set_decoded_context(&mut self, data_length: usize) {
-        self.data_length = data_length;
-        self.state = TransportState::Decoded;
-    }
+    pub fn set_decoded_context(&mut self, data_length: usize) {}
 }
 
 impl Encoder for DataTransport {
-    type Item = BytesMut;
+    type Item = Vec<u8>;
     type Error = RdpError;
 
     fn encode(&mut self, data: Self::Item, mut stream: impl io::Write) -> Result<(), RdpError> {
-        ironrdp::Data::new(data.len()).to_buffer(&mut stream)?;
-        stream.write_all(data.as_ref())?;
+        ironrdp::Data::new(data).to_buffer(&mut stream)?;
         stream.flush()?;
-
         Ok(())
     }
 }
 
 impl Decoder for DataTransport {
-    type Item = usize;
+    type Item = Data;
     type Error = RdpError;
 
     fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
-        match self.state {
-            TransportState::ToDecode => {
-                let data_pdu = ironrdp::Data::from_buffer(&mut stream)?;
-
-                Ok(data_pdu.data_length)
-            }
-            TransportState::Decoded => Ok(self.data_length),
-        }
+        Ok(ironrdp::Data::from_buffer(&mut stream)?)
     }
 }
 
@@ -90,10 +72,9 @@ impl McsTransport {
         Self(transport)
     }
 
-    pub fn prepare_data_to_encode(mcs_pdu: ironrdp::McsPdu, extra_data: Option<Vec<u8>>) -> Result<BytesMut, RdpError> {
-        let mut mcs_pdu_buff = BytesMut::with_capacity(mcs_pdu.buffer_length());
-        mcs_pdu_buff.resize(mcs_pdu.buffer_length(), 0x00);
-        mcs_pdu.to_buffer(mcs_pdu_buff.as_mut()).map_err(RdpError::McsError)?;
+    pub fn prepare_data_to_encode(mcs_pdu: ironrdp::McsPdu, extra_data: Option<Vec<u8>>) -> Result<Vec<u8>, RdpError> {
+        let mut mcs_pdu_buff = Vec::with_capacity(mcs_pdu.buffer_length());
+        mcs_pdu.to_buffer(&mut mcs_pdu_buff).map_err(RdpError::McsError)?;
 
         if let Some(data) = extra_data {
             mcs_pdu_buff.extend_from_slice(&data);
@@ -104,7 +85,7 @@ impl McsTransport {
 }
 
 impl Encoder for McsTransport {
-    type Item = BytesMut;
+    type Item = Vec<u8>;
     type Error = RdpError;
 
     fn encode(&mut self, mcs_pdu_buff: Self::Item, mut stream: impl io::Write) -> Result<(), RdpError> {
@@ -113,21 +94,27 @@ impl Encoder for McsTransport {
 }
 
 impl Decoder for McsTransport {
-    type Item = ironrdp::McsPdu;
+    type Item = (ironrdp::McsPdu, Option<Vec<u8>>);
     type Error = RdpError;
 
     fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
-        self.0.decode(&mut stream)?;
-        let mcs_pdu = ironrdp::McsPdu::from_buffer(&mut stream).map_err(RdpError::McsError)?;
-
-        Ok(mcs_pdu)
+        let pdu = self.0.decode(&mut stream)?;
+        let mut data = Cursor::new(pdu.data);
+        let mcs_pdu = ironrdp::McsPdu::from_buffer(&mut data).map_err(RdpError::McsError)?;
+        let remaining = if data.remaining() > 0 {
+            let mut remaining = Vec::with_capacity(data.remaining());
+            data.read_to_end(&mut remaining)?;
+            Some(remaining)
+        } else {
+            None
+        };
+        Ok((mcs_pdu, remaining))
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct SendDataContextTransport {
     pub mcs_transport: McsTransport,
-    state: TransportState,
     channel_ids: ChannelIdentificators,
 }
 
@@ -139,7 +126,6 @@ impl SendDataContextTransport {
                 initiator_id,
                 channel_id,
             },
-            state: TransportState::ToDecode,
         }
     }
 
@@ -149,7 +135,6 @@ impl SendDataContextTransport {
 
     pub fn set_decoded_context(&mut self, channel_ids: ChannelIdentificators) {
         self.set_channel_ids(channel_ids);
-        self.state = TransportState::Decoded;
     }
 }
 
@@ -161,7 +146,6 @@ impl Default for SendDataContextTransport {
                 initiator_id: 0,
                 channel_id: 0,
             },
-            state: TransportState::ToDecode,
         }
     }
 }
@@ -188,33 +172,26 @@ impl Encoder for SendDataContextTransport {
 }
 
 impl Decoder for SendDataContextTransport {
-    type Item = ChannelIdentificators;
+    type Item = (ChannelIdentificators, Option<Vec<u8>>);
     type Error = RdpError;
 
     fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
-        match self.state {
-            TransportState::ToDecode => {
-                let mcs_pdu = self.mcs_transport.decode(&mut stream)?;
+        let (mcs_pdu, remaining) = self.mcs_transport.decode(&mut stream)?;
 
-                match mcs_pdu {
-                    ironrdp::McsPdu::SendDataIndication(send_data_context) => Ok(ChannelIdentificators {
-                        initiator_id: send_data_context.initiator_id,
-                        channel_id: send_data_context.channel_id,
-                    }),
-                    ironrdp::McsPdu::DisconnectProviderUltimatum(disconnect_reason) => {
-                        Err(RdpError::UnexpectedDisconnection(format!(
-                            "Server disconnection reason - {:?}",
-                            disconnect_reason
-                        )))
-                    }
-                    _ => Err(RdpError::UnexpectedPdu(format!(
-                        "Expected Send Data Context PDU, got {:?}",
-                        mcs_pdu.as_short_name()
-                    ))),
-                }
-            }
-            TransportState::Decoded => Ok(self.channel_ids),
-        }
+        let channel_ids = match mcs_pdu {
+            ironrdp::McsPdu::SendDataIndication(send_data_context) => Ok(ChannelIdentificators {
+                initiator_id: send_data_context.initiator_id,
+                channel_id: send_data_context.channel_id,
+            }),
+            ironrdp::McsPdu::DisconnectProviderUltimatum(disconnect_reason) => Err(RdpError::UnexpectedDisconnection(
+                format!("Server disconnection reason - {:?}", disconnect_reason),
+            )),
+            _ => Err(RdpError::UnexpectedPdu(format!(
+                "Expected Send Data Context PDU, got {:?}",
+                mcs_pdu.as_short_name()
+            ))),
+        }?;
+        Ok ((channel_ids, remaining))
     }
 }
 
@@ -261,7 +238,7 @@ impl Decoder for ShareControlHeaderTransport {
     type Error = RdpError;
 
     fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
-        let channel_ids = self.send_data_context_transport.decode(&mut stream)?;
+        let (channel_ids, data) = self.send_data_context_transport.decode(&mut stream)?;
         if channel_ids.channel_id != self.global_channel_id {
             return Err(RdpError::InvalidResponse(format!(
                 "Unexpected Send Data Context channel ID ({})",
@@ -269,18 +246,24 @@ impl Decoder for ShareControlHeaderTransport {
             )));
         }
 
-        let share_control_header =
-            ironrdp::ShareControlHeader::from_buffer(&mut stream).map_err(RdpError::ShareControlHeaderError)?;
-        self.share_id = share_control_header.share_id;
+        if let Some(data) = data {
+            let share_control_header =
+                ironrdp::ShareControlHeader::from_buffer(data.as_slice()).map_err(RdpError::ShareControlHeaderError)?;
+            self.share_id = share_control_header.share_id;
 
-        if share_control_header.pdu_source != SERVER_CHANNEL_ID {
-            warn!(
-                "Invalid Share Control Header pdu source: expected ({}) != actual ({})",
-                SERVER_CHANNEL_ID, share_control_header.pdu_source
-            );
+            if share_control_header.pdu_source != SERVER_CHANNEL_ID {
+                warn!(
+                    "Invalid Share Control Header pdu source: expected ({}) != actual ({})",
+                    SERVER_CHANNEL_ID, share_control_header.pdu_source
+                );
+            }
+
+
+            Ok(share_control_header.share_control_pdu)
+        } else {
+            // TODO Fix this
+            Err(RdpError::StaticChannelNotConnected)   
         }
-
-        Ok(share_control_header.share_control_pdu)
     }
 }
 

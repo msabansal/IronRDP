@@ -7,7 +7,6 @@ use ironrdp_client::{process_active_stage, process_connection_sequence, RdpError
 use log::error;
 #[cfg(all(feature = "native-tls", not(feature = "rustls")))]
 use native_tls::{HandshakeError, TlsConnector};
-use rustls::KeyLogFile;
 use x509_parser::prelude::{FromDer, X509Certificate};
 
 use self::config::Config;
@@ -125,9 +124,10 @@ fn establish_tls(stream: impl io::Read + io::Write) -> Result<UpgradedStream<imp
             .with_custom_certificate_verifier(std::sync::Arc::new(danger::NoCertificateVerification))
             .with_no_client_auth();
         // Allows for wireshark to be able to decode the TLS stream
-        client_config.key_log = std::sync::Arc::new(KeyLogFile::new());
+        client_config.key_log = std::sync::Arc::new(rustls::KeyLogFile::new());
         let rc_config = std::sync::Arc::new(client_config);
         let example_com = "stub_string".try_into().unwrap();
+
         let client = rustls::ClientConnection::new(rc_config, example_com)?;
         rustls::StreamOwned::new(client, stream)
     };

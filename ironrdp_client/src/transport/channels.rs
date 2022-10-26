@@ -54,11 +54,15 @@ impl Decoder for StaticVirtualChannelTransport {
     type Error = RdpError;
 
     fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
-        let channel_ids = self.transport.decode(&mut stream)?;
+        let (channel_ids, data) = self.transport.decode(&mut stream)?;
         self.channel_ids = channel_ids;
-        let channel_header = vc::ChannelPduHeader::from_buffer(&mut stream)?;
-
-        Ok((channel_ids.channel_id, channel_header.total_length as usize))
+        if let Some(data) = data {
+            let channel_header = vc::ChannelPduHeader::from_buffer(data.as_slice())?;
+            Ok((channel_ids.channel_id, channel_header.total_length as usize))
+        } else {
+            // TODO Fix this error
+            Err(RdpError::AccessDenied)
+        }
     }
 }
 

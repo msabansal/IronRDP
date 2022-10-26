@@ -9,7 +9,7 @@ use ironrdp::dvc::gfx::ServerPdu;
 use ironrdp::dvc::FieldType;
 use ironrdp::rdp::vc::{self, dvc};
 use ironrdp::rdp::{ErrorInfo, ProtocolIndependentCode, ServerSetErrorInfoPdu};
-use ironrdp::{Data, ShareDataPdu};
+use ironrdp::{Data, ShareDataPdu, PduParsing};
 use log::{debug, error};
 
 use crate::transport::{
@@ -58,16 +58,20 @@ impl Processor {
         data: Data,
     ) -> Result<(), RdpError> {
         let mut transport = SendDataContextTransport::default();
-        transport.mcs_transport.0.set_decoded_context(data.data_length);
+        // transport.mcs_transport.0.set_decoded_context(data.data_length);
+        let mut pdu = Vec::new();
 
-        let channel_ids = transport.decode(&mut stream)?;
-        transport.set_decoded_context(channel_ids);
+        data.to_buffer(&mut pdu)?;
+
+        let (channel_ids, data) = transport.decode(pdu.as_slice())?;
+        // transport.set_decoded_context(channel_ids);
+        let data = data.unwrap();
 
         let channel_id = channel_ids.channel_id;
         let initiator_id = channel_ids.initiator_id;
         match self.static_channels.get(&channel_id).map(String::as_str) {
             Some(vc::DRDYNVC_CHANNEL_NAME) => self.process_dvc_message(
-                &mut stream,
+        data.as_slice(),
                 &mut output,
                 transport,
                 channel_id,
@@ -83,7 +87,7 @@ impl Processor {
                 }
                 let transport = self.static_transport.as_mut().unwrap();
 
-                process_global_channel_pdu(&mut stream, transport)
+                process_global_channel_pdu(data.as_slice(), transport)
             }
             Some(_) => Err(RdpError::UnexpectedChannel(channel_id)),
             None => panic!("Channel with {} ID must be added", channel_id),

@@ -78,12 +78,12 @@ impl PduParsing for TpktHeader {
 
 #[derive(Debug, PartialEq)]
 pub struct Data {
-    pub data_length: usize,
+    pub data: Vec<u8>,
 }
 
 impl Data {
-    pub fn new(data_length: usize) -> Self {
-        Self { data_length }
+    pub fn new(data: Vec<u8>) -> Self {
+        Self { data }
     }
 
     pub fn from_buffer_with_version(mut stream: impl io::Read, version: u8) -> Result<Self, NegotiationError> {
@@ -99,7 +99,9 @@ impl Data {
 
         let data_length = tpkt.length - tpkt.buffer_length() - TPDU_DATA_HEADER_LENGTH;
 
-        Ok(Self { data_length })
+        let mut data = vec![0u8; data_length];
+        stream.read_exact(&mut data)?;
+        Ok(Self { data })
     }
 }
 
@@ -113,12 +115,12 @@ impl PduParsing for Data {
     }
 
     fn to_buffer(&self, mut stream: impl std::io::Write) -> Result<(), Self::Error> {
-        TpktHeader::new(self.buffer_length() + self.data_length).to_buffer(&mut stream)?;
+        TpktHeader::new(self.buffer_length() + self.data.len()).to_buffer(&mut stream)?;
 
         stream.write_u8(TPDU_DATA_HEADER_LENGTH as u8 - 1)?;
         stream.write_u8(X224TPDUType::Data.to_u8().unwrap())?;
         stream.write_u8(EOF)?;
-
+        stream.write_all(&self.data)?;
         Ok(())
     }
 

@@ -180,17 +180,13 @@ pub fn process_mcs_connect(
     let connect_initial =
         ironrdp::ConnectInitial::with_gcc_blocks(user_info::create_gcc_blocks(config, selected_protocol)?);
     debug!("Send MCS Connect Initial PDU: {:?}", connect_initial);
-    let mut connect_initial_buf = BytesMut::with_capacity(connect_initial.buffer_length());
-    connect_initial_buf.resize(connect_initial.buffer_length(), 0x00);
-    connect_initial.to_buffer(connect_initial_buf.as_mut())?;
+    let mut connect_initial_buf = Vec::with_capacity(connect_initial.buffer_length());
+    connect_initial.to_buffer(&mut connect_initial_buf)?;
     transport.encode(connect_initial_buf, &mut stream)?;
 
-    let data_length = transport.decode(&mut stream)?;
-    let mut data = BytesMut::with_capacity(data_length);
-    data.resize(data_length, 0x00);
-    stream.read_exact(&mut data)?;
-
-    let connect_response = ironrdp::ConnectResponse::from_buffer(data.as_ref()).map_err(RdpError::McsConnectError)?;
+    let data = transport.decode(&mut stream)?;
+    let data = data.data;
+    let connect_response = ironrdp::ConnectResponse::from_buffer(data.as_slice()).map_err(RdpError::McsConnectError)?;
     debug!("Got MCS Connect Response PDU: {:?}", connect_response);
 
     let gcc_blocks = connect_response.conference_create_response.gcc_blocks;
@@ -247,7 +243,7 @@ pub fn process_mcs(
         &mut stream,
     )?;
 
-    let mcs_pdu = transport.decode(&mut stream)?;
+    let (mcs_pdu, data) = transport.decode(&mut stream)?;
     let initiator_id = if let ironrdp::McsPdu::AttachUserConfirm(attach_user_confirm) = mcs_pdu {
         debug!("Got MCS Attach User Confirm PDU: {:?}", attach_user_confirm);
 
@@ -272,7 +268,7 @@ pub fn process_mcs(
             &mut stream,
         )?;
 
-        let mcs_pdu = transport.decode(&mut stream)?;
+        let (mcs_pdu, data) = transport.decode(&mut stream)?;
         if let ironrdp::McsPdu::ChannelJoinConfirm(channel_join_confirm) = mcs_pdu {
             debug!("Got MCS Channel Join Confirm PDU: {:?}", channel_join_confirm);
 
@@ -318,7 +314,7 @@ pub fn process_server_license_exchange(
     config: &InputConfig,
     global_channel_id: u16,
 ) -> Result<(), RdpError> {
-    let channel_ids = transport.decode(&mut stream)?;
+    let (channel_ids, data) = transport.decode(&mut stream)?;
     check_global_id(channel_ids, global_channel_id)?;
 
     let initial_license_message = InitialServerLicenseMessage::from_buffer(&mut stream)
@@ -376,7 +372,7 @@ pub fn process_server_license_exchange(
     })?;
     transport.encode(new_pdu_buffer, &mut stream)?;
 
-    let channel_ids = transport.decode(&mut stream)?;
+    let (channel_ids, data) = transport.decode(&mut stream)?;
     check_global_id(channel_ids, global_channel_id)?;
 
     let challenge = ServerPlatformChallenge::from_buffer(&mut stream)
@@ -409,7 +405,7 @@ pub fn process_server_license_exchange(
     })?;
     transport.encode(new_pdu_buffer, &mut stream)?;
 
-    let channel_ids = transport.decode(&mut stream)?;
+    let (channel_ids, data) = transport.decode(&mut stream)?;
     check_global_id(channel_ids, global_channel_id)?;
 
     let upgrade_license = ServerUpgradeLicense::from_buffer(&mut stream)
