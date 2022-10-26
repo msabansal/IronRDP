@@ -1,11 +1,10 @@
-use std::io;
-
 use bytes::BytesMut;
-use ironrdp::{nego, PduParsing};
+use ironrdp::{async_read_complete_pdu, nego, PduParsing};
 use log::debug;
 use sspi::internal::credssp;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
-use super::{DataTransport, Decoder, Encoder};
+use super::DataTransport;
 use crate::RdpError;
 
 const MAX_TS_REQUEST_LENGTH_BUFFER_SIZE: usize = 4;
@@ -13,11 +12,12 @@ const MAX_TS_REQUEST_LENGTH_BUFFER_SIZE: usize = 4;
 #[derive(Default)]
 pub struct TsRequestTransport;
 
-impl Encoder for TsRequestTransport {
-    type Item = credssp::TsRequest;
-    type Error = RdpError;
-
-    fn encode(&mut self, ts_request: Self::Item, mut stream: impl io::Write) -> Result<(), RdpError> {
+impl TsRequestTransport {
+    pub async fn encode(
+        &mut self,
+        ts_request: credssp::TsRequest,
+        mut stream: impl AsyncWrite + Unpin,
+    ) -> Result<(), RdpError> {
         let mut buf = BytesMut::with_capacity(ts_request.buffer_len() as usize);
         buf.resize(ts_request.buffer_len() as usize, 0x00);
 
@@ -25,25 +25,20 @@ impl Encoder for TsRequestTransport {
             .encode_ts_request(buf.as_mut())
             .map_err(RdpError::TsRequestError)?;
 
-        stream.write_all(buf.as_ref())?;
-        stream.flush()?;
+        stream.write_all(buf.as_ref()).await?;
+        stream.flush().await?;
 
         Ok(())
     }
-}
 
-impl Decoder for TsRequestTransport {
-    type Item = credssp::TsRequest;
-    type Error = RdpError;
-
-    fn decode(&mut self, mut stream: impl io::Read) -> Result<Self::Item, RdpError> {
+    pub async fn decode(&mut self, mut stream: impl AsyncRead + Unpin) -> Result<credssp::TsRequest, RdpError> {
         let mut buf = BytesMut::with_capacity(MAX_TS_REQUEST_LENGTH_BUFFER_SIZE);
         buf.resize(MAX_TS_REQUEST_LENGTH_BUFFER_SIZE, 0x00);
-        stream.read_exact(&mut buf)?;
+        stream.read_exact(&mut buf).await?;
 
         let ts_request_buffer_length = credssp::TsRequest::read_length(buf.as_ref())?;
         buf.resize(ts_request_buffer_length, 0x00);
-        stream.read_exact(&mut buf[MAX_TS_REQUEST_LENGTH_BUFFER_SIZE..])?;
+        stream.read_exact(&mut buf[MAX_TS_REQUEST_LENGTH_BUFFER_SIZE..]).await?;
 
         let ts_request = credssp::TsRequest::from_buffer(buf.as_ref()).map_err(RdpError::TsRequestError)?;
 
@@ -54,10 +49,10 @@ impl Decoder for TsRequestTransport {
 pub struct EarlyUserAuthResult;
 
 impl EarlyUserAuthResult {
-    pub fn read(mut stream: impl io::Read) -> Result<credssp::EarlyUserAuthResult, RdpError> {
+    pub async fn read(mut stream: impl AsyncRead + Unpin) -> Result<credssp::EarlyUserAuthResult, RdpError> {
         let mut buf = BytesMut::with_capacity(credssp::EARLY_USER_AUTH_RESULT_PDU_SIZE);
         buf.resize(credssp::EARLY_USER_AUTH_RESULT_PDU_SIZE, 0x00);
-        stream.read_exact(&mut buf)?;
+        stream.read_exact(&mut buf).await?;
         let early_user_auth_result =
             credssp::EarlyUserAuthResult::from_buffer(buf.as_ref()).map_err(RdpError::EarlyUserAuthResultError)?;
 
@@ -65,8 +60,8 @@ impl EarlyUserAuthResult {
     }
 }
 
-pub fn connect(
-    mut stream: impl io::Read + io::Write,
+pub async fn connect(
+    mut stream: impl AsyncRead + AsyncWrite + Unpin,
     security_protocol: nego::SecurityProtocol,
     username: String,
 ) -> Result<(DataTransport, nego::SecurityProtocol), RdpError> {
@@ -76,13 +71,14 @@ pub fn connect(
         security_protocol,
         nego::RequestFlags::empty(),
         0,
-    )?;
+    )
+    .await?;
 
     Ok((DataTransport::default(), selected_protocol))
 }
 
-fn process_negotiation(
-    mut stream: impl io::Read + io::Write,
+async fn process_negotiation(
+    mut stream: impl AsyncRead + AsyncWrite + Unpin,
     nego_data: Option<nego::NegoData>,
     protocol: nego::SecurityProtocol,
     flags: nego::RequestFlags,
@@ -95,10 +91,13 @@ fn process_negotiation(
         src_ref,
     };
     debug!("Send X.224 Connection Request PDU: {:?}", connection_request);
-    connection_request.to_buffer(&mut stream)?;
-    stream.flush()?;
+    let mut buffer = Vec::new();
+    connection_request.to_buffer(&mut buffer)?;
+    stream.write_all(buffer.as_slice()).await?;
+    stream.flush().await?;
 
-    let connection_response = nego::Response::from_buffer(&mut stream)?;
+    let data = async_read_complete_pdu(&mut stream).await?;
+    let connection_response = nego::Response::from_buffer(data.as_slice())?;
     if let Some(nego::ResponseData::Response {
         flags,
         protocol: selected_protocol,

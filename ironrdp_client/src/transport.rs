@@ -4,6 +4,7 @@ use bytes::BytesMut;
 use ironrdp::rdp::SERVER_CHANNEL_ID;
 use ironrdp::{PduParsing, RdpPdu};
 use log::warn;
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 
 use crate::RdpError;
 
@@ -364,4 +365,21 @@ impl Encoder for RdpTransport {
 
         Ok(())
     }
+}
+
+pub async fn write_async_message_to_transport<T, S>(
+    transport: &mut T,
+    data: T::Item,
+    stream: &mut S,
+) -> Result<(), T::Error>
+where
+    T: Encoder,
+    S: AsyncWrite + Unpin,
+    <T as Encoder>::Error: From<std::io::Error>,
+{
+    let mut buffer = Vec::new();
+    transport.encode(data, &mut buffer)?;
+    stream.write_all(buffer.as_slice()).await?;
+    stream.flush().await?;
+    Ok(())
 }

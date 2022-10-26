@@ -12,6 +12,10 @@ mod preconnection;
 mod utils;
 mod x224;
 
+use std::io::Cursor;
+
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+
 pub use crate::basic_output::{bitmap, fast_path, surface_commands};
 pub use crate::mcs::{ConnectInitial, ConnectResponse, McsError, McsPdu, SendDataContext};
 pub use crate::nego::*;
@@ -23,6 +27,10 @@ pub use crate::rdp::{
 };
 pub use crate::utils::Rectangle;
 pub use crate::x224::*;
+
+use bit_field::BitField;
+use byteorder::ReadBytesExt;
+use num_traits::FromPrimitive;
 
 pub trait PduParsing {
     type Error;
@@ -54,10 +62,6 @@ impl PduParsing for RdpPdu {
     type Error = RdpError;
 
     fn from_buffer(mut stream: impl std::io::Read) -> Result<Self, Self::Error> {
-        use bit_field::BitField;
-        use byteorder::ReadBytesExt;
-        use num_traits::FromPrimitive;
-
         let header = stream.read_u8()?;
         let action = header.get_bits(0..2);
         let action = Action::from_u8(action).ok_or(RdpError::InvalidActionCode(action))?;
@@ -103,7 +107,48 @@ impl_from_error!(nego::NegotiationError, RdpError, RdpError::X224Error);
 impl_from_error!(fast_path::FastPathError, RdpError, RdpError::FastPathError);
 
 #[derive(Debug, Copy, Clone, PartialEq, num_derive::FromPrimitive, num_derive::ToPrimitive)]
-enum Action {
+pub enum Action {
     FastPath = 0x0,
     X224 = 0x3,
+}
+
+/// Reads a complete PDU into a buffer
+pub async fn async_read_complete_pdu<T>(mut stream: T) -> Result<Vec<u8>, RdpError>
+where
+    T: AsyncRead + Unpin,
+{
+    let header = stream.read_u8().await?;
+    let action = header.get_bits(0..2);
+    let action = Action::from_u8(action).ok_or(RdpError::InvalidActionCode(action))?;
+
+    let data = Vec::new();
+    let mut data_stream = Cursor::new(data);
+
+    data_stream.write_u8(header).await?;
+
+    let length = match action {
+        Action::X224 => {
+            let reserved = stream.read_u8().await?;
+            let length = stream.read_u16().await?;
+            data_stream.write_u8(reserved).await?;
+            AsyncWriteExt::write_all(&mut data_stream, &length.to_be_bytes()).await?;
+            length
+        }
+        Action::FastPath => {
+            let a = stream.read_u8().await?;
+            data_stream.write_u8(a).await?;
+            if a & 0x80 != 0 {
+                let b = stream.read_u8().await?;
+                data_stream.write_u8(b).await?;
+                ((u16::from(a) & !0x80) << 8) + u16::from(b)
+            } else {
+                u16::from(a)
+            }
+        }
+    };
+    let mut data = data_stream.into_inner();
+    let begin = data.len();
+    data.resize(length as usize, 0);
+    stream.read_exact(&mut data[begin..]).await?;
+    Ok(data)
 }
