@@ -1,11 +1,13 @@
 mod errors;
-mod utils;
+
+use std::path::PathBuf;
 
 use ironrdp::{gcc, nego};
 
 pub mod active_session;
 pub mod connection_sequence;
 pub mod transport;
+pub mod utils;
 
 pub use self::active_session::process_active_stage;
 pub use self::connection_sequence::{process_connection_sequence, ConnectionSequenceResult, UpgradedStream};
@@ -13,6 +15,7 @@ pub use self::errors::RdpError;
 
 const BUF_STREAM_SIZE: usize = 32 * 1024;
 
+#[derive(Debug, Clone)]
 pub struct GraphicsConfig {
     pub avc444: bool,
     pub h264: bool,
@@ -21,6 +24,7 @@ pub struct GraphicsConfig {
     pub capabilities: u32,
 }
 
+#[derive(Debug, Clone)]
 pub struct InputConfig {
     pub credentials: sspi::AuthIdentity,
     pub security_protocol: nego::SecurityProtocol,
@@ -34,4 +38,5 @@ pub struct InputConfig {
     pub global_channel_name: String,
     pub user_channel_name: String,
     pub graphics_config: Option<GraphicsConfig>,
+    pub gfx_dump_file: Option<PathBuf>,
 }

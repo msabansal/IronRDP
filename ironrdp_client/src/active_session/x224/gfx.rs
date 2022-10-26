@@ -1,3 +1,5 @@
+use std::sync::mpsc::SyncSender;
+
 use bitflags::bitflags;
 use ironrdp::{
     dvc::gfx::{
@@ -16,14 +18,16 @@ pub struct Handler {
     decompressor: zgfx::Decompressor,
     decompressed_buffer: Vec<u8>,
     frames_decoded: u32,
+    handler: Option<SyncSender<ServerPdu>>,
 }
 
 impl Handler {
-    pub fn new() -> Self {
+    pub fn new(handler: Option<SyncSender<ServerPdu>>) -> Self {
         Self {
             decompressor: zgfx::Decompressor::new(),
             decompressed_buffer: Vec::with_capacity(1024 * 16),
             frames_decoded: 0,
+            handler,
         }
     }
 }
@@ -39,7 +43,7 @@ impl DynamicChannelDataHandler for Handler {
             let gfx_pdu = ServerPdu::from_buffer(&mut slice)?;
             debug!("Got GFX PDU: {:?}", gfx_pdu);
 
-            if let ServerPdu::EndFrame(end_frame_pdu) = gfx_pdu {
+            if let ServerPdu::EndFrame(end_frame_pdu) = &gfx_pdu {
                 self.frames_decoded += 1;
                 // Enqueue an acknowledge for every end frame
                 let client_pdu = ClientPdu::FrameAcknowledge(FrameAcknowledgePdu {
@@ -50,8 +54,11 @@ impl DynamicChannelDataHandler for Handler {
                 debug!("Sending GFX PDU: {:?}", client_pdu);
                 client_pdu_buffer.reserve(client_pdu_buffer.len() + client_pdu.buffer_length());
                 client_pdu.to_buffer(&mut client_pdu_buffer)?;
-            } else {
+            }
+            // If there is a listener send all the ODU to the listener
+            if let Some(handler) = self.handler.as_mut() {
                 // Handle the normal PDU
+                handler.send(gfx_pdu).map_err(|e| RdpError::SendError(e.to_string()))?;
             }
         }
 

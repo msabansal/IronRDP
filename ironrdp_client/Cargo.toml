@@ -9,6 +9,7 @@ repository = "https://github.com/Devolutions/IronRDP"
 authors = ["Marc-André Moreau <mamoreau@devolutions.net>",
            "Vladyslav Hordiienko <hord.vlad@gmail.com"]
 keywords = ["rdp", "client", "remote", "desktop", "protocol", "gfx", "rfx"]
+default-run = "ironrdp_client_app"
 
 [lib]
 name = "ironrdp_client"
@@ -19,9 +20,10 @@ name = "ironrdp_client_app"
 path = "src/main.rs"
 
 [features]
-default = ["rustls"]
+default = ["rustls", "gui"]
 rustls = ["dep:rustls"]
 native-tls = ["dep:native-tls"]
+gui = ["glow", "glutin", "ui-core"]
 
 [dependencies]
 ironrdp = { path = "../ironrdp" }
@@ -45,3 +47,6 @@ native-tls = { version = "0.2", optional = true }
 rustls = { version = "0.20", features = ["dangerous_configuration"], optional = true }
 dns-lookup = "1.0.8"
 bitflags = "1"
+glow = { version ="0.11.0", optional = true }
+glutin = { version = "0.29", optional = true }
+ui-core = { path = "../ui_core", optional = true }
