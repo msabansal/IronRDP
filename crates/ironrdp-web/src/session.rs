@@ -805,6 +805,7 @@ fn build_config(
         pointer_software_rendering: false,
         performance_flags: PerformanceFlags::default(),
         desktop_scale_factor: 0,
+        vm_connect: None,
     }
 }
 

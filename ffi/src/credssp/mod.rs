@@ -4,10 +4,11 @@ pub mod network;
 #[diplomat::bridge]
 pub mod ffi {
 
+    use ironrdp::connector::ClientConnectorState;
+
     use crate::{
         connector::{
-            ffi::{ClientConnector, PduHint},
-            result::ffi::Written,
+            ffi::{ClientConnector, PduHint}, result::ffi::Written
         },
         error::{ffi::IronRdpError, ValueConsumedError},
         pdu::ffi::WriteBuf,
@@ -61,17 +62,28 @@ pub mod ffi {
                 return Err(ValueConsumedError::for_item("connector").into());
             };
 
-            let (credssp_sequence, ts_request) = ironrdp::connector::credssp::CredsspSequence::init(
-                connector,
-                server_name.into(),
-                server_public_key.to_owned(),
-                kerbero_configs.map(|config| config.0.clone()),
-            )?;
-
-            Ok(Box::new(CredsspSequenceInitResult {
-                credssp_sequence: Some(Box::new(CredsspSequence(credssp_sequence))),
-                ts_request: Some(Box::new(TsRequest(ts_request))),
-            }))
+            match connector.state {
+                ClientConnectorState::Credssp { selected_protocol } => {
+                    let (credssp_sequence, ts_request) = ironrdp::connector::credssp::CredsspSequence::init(
+                        connector.config.credentials.clone(),
+                        connector.config.domain.as_deref(),
+                        selected_protocol,  
+                        server_name.into(),
+                        server_public_key.to_owned(),
+                        kerbero_configs.map(|config| config.0.clone()),
+                    )?;
+        
+                    Ok(Box::new(CredsspSequenceInitResult {
+                        credssp_sequence: Some(Box::new(CredsspSequence(credssp_sequence))),
+                        ts_request: Some(Box::new(TsRequest(ts_request))),
+                    }))
+                },
+                _ => {
+                    Err(ValueConsumedError::for_item("credssp_sequence_init").into())
+                }
+            }
+            
+            
         }
 
         pub fn decode_server_message(&mut self, pdu: &[u8]) -> Result<Option<Box<TsRequest>>, Box<IronRdpError>> {

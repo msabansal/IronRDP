@@ -223,6 +223,13 @@ struct Args {
     #[clap(long, alias = "no-nla")]
     no_credssp: bool,
 
+    /// Connect to VM console of hyperv VM
+    ///
+    #[clap(long)]
+    vm_connect: Option<String>,
+
+    
+
     /// The clipboard type
     #[clap(long, value_enum, value_parser, default_value_t = ClipboardType::Default)]
     clipboard_type: ClipboardType,
@@ -320,6 +327,7 @@ impl Config {
             autologon: args.autologon,
             pointer_software_rendering: true,
             performance_flags: PerformanceFlags::default(),
+            vm_connect: args.vm_connect,
         };
 
         Ok(Self {

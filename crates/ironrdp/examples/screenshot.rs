@@ -227,6 +227,7 @@ fn build_config(username: String, password: String, domain: Option<String>) -> c
         pointer_software_rendering: true,
         performance_flags: PerformanceFlags::default(),
         desktop_scale_factor: 0,
+        vm_connect: None,
     }
 }
 

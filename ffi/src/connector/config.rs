@@ -194,6 +194,7 @@ pub mod ffi {
                 pointer_software_rendering: self.pointer_software_rendering.unwrap_or(false),
                 performance_flags: self.performance_flags.ok_or("performance flag is missing")?,
                 desktop_scale_factor: 0,
+                vm_connect: None,
             };
             tracing::debug!(config=?inner_config, "Built config");
             Ok(Box::new(Config(inner_config)))

@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::mem;
 use std::net::SocketAddr;
 
+use ironrdp_pdu::pcb::{PcbVersion, PreconnectionBlob};
 use ironrdp_pdu::rdp::client_info::TimezoneInfo;
 use ironrdp_pdu::write_buf::WriteBuf;
 use ironrdp_pdu::{decode, encode_vec, gcc, mcs, nego, rdp, PduEncode, PduHint};
@@ -44,6 +45,7 @@ pub enum ClientConnectorState {
     Credssp {
         selected_protocol: nego::SecurityProtocol,
     },
+    AdditionalConnectNegotiation,
     BasicSettingsExchangeSendInitial {
         selected_protocol: nego::SecurityProtocol,
     },
@@ -104,6 +106,7 @@ impl State for ClientConnectorState {
                 connection_activation, ..
             } => connection_activation.state().name(),
             Self::Connected { .. } => "Connected",
+            Self::AdditionalConnectNegotiation => "AdditionalConnectNegotiation",
         }
     }
 
@@ -207,6 +210,7 @@ impl Sequence for ClientConnector {
                 connection_activation, ..
             } => connection_activation.next_pdu_hint(),
             ClientConnectorState::Connected { .. } => None,
+            ClientConnectorState::AdditionalConnectNegotiation => None,
         }
     }
 
@@ -249,24 +253,38 @@ impl Sequence for ClientConnector {
                     return Err(reason_err!("Initiation", "standard RDP security is not supported",));
                 }
 
-                let connection_request = nego::ConnectionRequest {
-                    nego_data: Some(nego::NegoRequestData::cookie(
-                        self.config.credentials.username().to_owned(),
-                    )),
-                    flags: nego::RequestFlags::empty(),
-                    protocol: security_protocol,
-                };
 
-                debug!(message = ?connection_request, "Send");
+                if self.config.vm_connect.is_some() {
+                    let preconnect_request = PreconnectionBlob {
+                        version: PcbVersion::V2,
+                        id: 0,
+                        v2_payload: self.config.vm_connect.clone(),
+                    };
+    
+                    debug!(message = ?preconnect_request, "Send PreconnectionRequest");
+                    let preconnect_block_written = ironrdp_pdu::encode_buf(&preconnect_request, output).map_err(ConnectorError::pdu)?;
+                    (
+                        Written::from_size(preconnect_block_written)?,
+                        ClientConnectorState::EnhancedSecurityUpgrade { selected_protocol: nego::SecurityProtocol::HYBRID },
+                    )
+                } else {
+                    let connection_request = nego::ConnectionRequest {
+                        nego_data: Some(nego::NegoRequestData::cookie(
+                            self.config.credentials.username().to_owned(),
+                        )),
+                        flags: nego::RequestFlags::empty(),
+                        protocol: security_protocol,
+                    };
 
-                let written = ironrdp_pdu::encode_buf(&connection_request, output).map_err(ConnectorError::pdu)?;
-
-                (
-                    Written::from_size(written)?,
-                    ClientConnectorState::ConnectionInitiationWaitConfirm {
-                        requested_protocol: security_protocol,
-                    },
-                )
+                    debug!(message = ?connection_request, "Send");
+                    let written = ironrdp_pdu::encode_buf(&connection_request, output).map_err(ConnectorError::pdu)?;
+                    (
+                        Written::from_size(written)?,
+                        ClientConnectorState::ConnectionInitiationWaitConfirm {
+                            requested_protocol: security_protocol,
+                        },
+                    )
+                }
             }
             ClientConnectorState::ConnectionInitiationWaitConfirm { requested_protocol } => {
                 let connection_confirm = decode::<nego::ConnectionConfirm>(input).map_err(ConnectorError::pdu)?;
@@ -292,7 +310,7 @@ impl Sequence for ClientConnector {
 
                 (
                     Written::Nothing,
-                    ClientConnectorState::EnhancedSecurityUpgrade { selected_protocol },
+                    ClientConnectorState::BasicSettingsExchangeSendInitial { selected_protocol },
                 )
             }
 
@@ -314,11 +332,40 @@ impl Sequence for ClientConnector {
             }
 
             //== CredSSP ==//
-            ClientConnectorState::Credssp { selected_protocol } => (
-                Written::Nothing,
-                ClientConnectorState::BasicSettingsExchangeSendInitial { selected_protocol },
-            ),
+            ClientConnectorState::Credssp { selected_protocol } => {
+                if self.config.vm_connect.is_some() {
+                    (
+                        Written::Nothing,
+                        ClientConnectorState::AdditionalConnectNegotiation,
+                    )
+                } else {
+                    (
+                        Written::Nothing,
+                        ClientConnectorState::BasicSettingsExchangeSendInitial { selected_protocol },
+                    )
+                }
+            },
 
+            ClientConnectorState::AdditionalConnectNegotiation => {
+
+                    //== CredSSP ==//
+                let security_protocol = nego::SecurityProtocol::HYBRID | nego::SecurityProtocol::SSL ;
+                
+                let connection_request = nego::ConnectionRequest {
+                    nego_data: None,
+                    flags: nego::RequestFlags::empty(),
+                    protocol: security_protocol,
+                };
+
+                debug!(message = ?connection_request, "Send AdditionalNegotiate");
+                let written = ironrdp_pdu::encode_buf(&connection_request, output).map_err(ConnectorError::pdu)?;
+                (
+                    Written::from_size(written)?,
+                    ClientConnectorState::ConnectionInitiationWaitConfirm { requested_protocol: security_protocol },
+                )
+
+                
+            },
             //== Basic Settings Exchange ==//
             // Exchange basic settings including Core Data, Security Data and Network Data.
             ClientConnectorState::BasicSettingsExchangeSendInitial { selected_protocol } => {

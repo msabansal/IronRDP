@@ -6,7 +6,7 @@ use sspi::negotiate::ProtocolConfig;
 use sspi::Username;
 
 use crate::{
-    ClientConnector, ClientConnectorState, ConnectorError, ConnectorErrorKind, ConnectorResult, ServerName, Written,
+    ConnectorError, ConnectorErrorKind, ConnectorResult, Credentials, ServerName, Written
 };
 
 #[derive(Debug, Clone, Default)]
@@ -90,24 +90,25 @@ impl CredsspSequence {
 
     /// `server_name` must be the actual target server hostname (as opposed to the proxy)
     pub fn init(
-        connector: &ClientConnector,
+        credentials: Credentials,
+        domain: Option<&str>,
+        selected_protocol: nego::SecurityProtocol,
         server_name: ServerName,
         server_public_key: Vec<u8>,
         kerberos_config: Option<KerberosConfig>,
     ) -> ConnectorResult<(Self, credssp::TsRequest)> {
-        let config = &connector.config;
-        if let crate::Credentials::SmartCard { .. } = config.credentials {
+        if let crate::Credentials::SmartCard { .. } = credentials {
             return Err(general_err!(
                 "CredSSP with smart card credentials is not currently supported"
             ));
         }
 
-        let username = Username::new(config.credentials.username(), config.domain.as_deref())
+        let username = Username::new(credentials.username(), domain)
             .map_err(|e| custom_err!("invalid username", e))?;
 
         let credentials = sspi::AuthIdentity {
             username,
-            password: config.credentials.secret().to_owned().into(),
+            password: credentials.secret().to_owned().into(),
         };
 
         let server_name = server_name.into_inner();
@@ -135,20 +136,15 @@ impl CredsspSequence {
         )
         .map_err(|e| ConnectorError::new("CredSSP", ConnectorErrorKind::Credssp(e)))?;
 
-        match connector.state {
-            ClientConnectorState::Credssp { selected_protocol } => {
-                let sequence = Self {
-                    client,
-                    state: CredsspState::Ongoing,
-                    selected_protocol,
-                };
+        let sequence = Self {
+            client,
+            state: CredsspState::Ongoing,
+            selected_protocol,
+        };
 
-                let initial_request = credssp::TsRequest::default();
+        let initial_request = credssp::TsRequest::default();
 
-                Ok((sequence, initial_request))
-            }
-            _ => Err(general_err!("invalid connector state for CredSSP sequence")),
-        }
+        Ok((sequence, initial_request))
     }
 
     /// Returns Some(ts_request) when a TS request is received from server,

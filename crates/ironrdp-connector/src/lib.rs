@@ -146,6 +146,7 @@ pub struct Config {
     pub no_server_pointer: bool,
     pub pointer_software_rendering: bool,
     pub performance_flags: PerformanceFlags,
+    pub vm_connect: Option<String>,
 }
 
 ironrdp_pdu::assert_impl!(Config: Send, Sync);
